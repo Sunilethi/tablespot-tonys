@@ -48,7 +48,12 @@ async function getRestaurantConfig({ includeSecrets = false } = {}) {
     // day; when present, it only applies within that time window (e.g.
     // a private event from 18:00-22:00 with a higher capacity, while
     // the rest of the day keeps the branch's normal limit).
-    capacityOverrides: row.capacity_overrides || [],
+    // Array.isArray guards against a branch whose stored value is still
+    // in the old whole-day-object format ('{}') from before this schema
+    // change — treats it as "no overrides" instead of crashing every
+    // page that reads config, which is what happened before this guard
+    // existed.
+    capacityOverrides: Array.isArray(row.capacity_overrides) ? row.capacity_overrides : [],
     ...(includeSecrets ? { pin: String(row.pin) } : {}),
   }));
 

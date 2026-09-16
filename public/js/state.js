@@ -50,6 +50,8 @@ export const state = {
   dashTab: 'today', // 'today' | 'admin'
   dashBookings: [],
   dashLoading: false,
+  dashWeeklyActivity: null,
+  selectedBookingId: null,
   showAddForm: false,
   addFormError: '',
   addFormBusy: false,

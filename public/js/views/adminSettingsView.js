@@ -116,7 +116,7 @@ function renderCapacityOverridesField(branch) {
   wrap.appendChild(el('label', { style: 'margin-top:14px;display:block;' }, ['Event capacity override (specific date, optionally a specific time window)']));
   wrap.appendChild(el('div', { class: 'hint', style: 'margin:2px 0 8px;' }, ['Leave the time fields blank to override the whole day. Set both to limit it to a window, e.g. 18:00–22:00 for an evening event.']));
 
-  const overrides = branch.capacityOverrides || [];
+  const overrides = Array.isArray(branch.capacityOverrides) ? branch.capacityOverrides : [];
   const tagList = el('div', { class: 'tag-list' });
   overrides.forEach((override, index) => {
     const windowLabel = (override.startTime && override.endTime)

@@ -1,6 +1,9 @@
 /**
- * The customer-facing booking wizard: pick a branch, pick a date/time,
- * enter details, confirm. Four steps, driven by state.cStep.
+ * The customer-facing booking flow: one screen with branch (dropdown),
+ * date, party size, and available times together — then a details
+ * screen, then confirmation. Two real steps, not four, closer to the
+ * simple single-screen widget pattern (branch dropdown, calendar, times
+ * below) than a long wizard.
  */
 
 import { el } from '../dom.js';
@@ -18,82 +21,52 @@ export function renderCustomer() {
     el('div', { class: 'hero-rule' }),
   ]));
 
-  if (state.cStep === 4) {
+  if (state.cStep === 3) {
     wrap.appendChild(renderConfirmStep());
     return wrap;
   }
 
   const stepsBar = el('div', { class: 'steps' });
-  [[1, t('stepBranch')], [2, t('stepTime')], [3, t('stepDetails')]].forEach(([n, label]) => {
+  [[1, t('stepBranch')], [2, t('stepDetails')]].forEach(([n, label]) => {
     const stepClass = n === state.cStep ? 'current' : (n < state.cStep ? 'done' : '');
     stepsBar.appendChild(el('div', { class: 'step-pill ' + stepClass }, [n + '. ' + label]));
   });
   wrap.appendChild(stepsBar);
 
-  if (state.cStep === 1) wrap.appendChild(renderStepBranch());
-  if (state.cStep === 2) wrap.appendChild(renderStepTime());
-  if (state.cStep === 3) wrap.appendChild(renderStepDetails());
+  if (state.cStep === 1) wrap.appendChild(renderBookingForm());
+  if (state.cStep === 2) wrap.appendChild(renderStepDetails());
 
   return wrap;
 }
 
-function renderStepBranch() {
+// ---------- Step 1: branch + date + guests + times, all on one screen ----------
+
+function renderBookingForm() {
   const card = el('div', { class: 'card' });
   card.appendChild(el('h2', {}, [t('chooseBranch')]));
   card.appendChild(el('div', { class: 'hint' }, [t('chooseBranchHint')]));
 
-  const grid = el('div', { class: 'branch-grid' });
-  state.config.branches.forEach((branch) => {
-    const selected = state.cBranch === branch.id;
-    const closedLine = branch.closedDay !== null ? (t('closedOn') + ': ' + DAY_NAMES[branch.closedDay]) : null;
-    grid.appendChild(el('button', {
-      class: 'branch-card' + (selected ? ' selected' : ''),
-      onClick: () => { state.cBranch = branch.id; state.cTime = null; state.cSlots = null; render(); },
-    }, [
-      el('div', { class: 'bname' }, [branch.name]),
-      el('div', { class: 'bcity' }, [branch.city]),
-      el('div', { class: 'bmeta' }, [
-        el('span', {}, [t('hoursLabel') + ': ' + state.config.openTime + '–' + state.config.closeTime]),
-        el('span', {}, [t('capacityLabel') + ': ' + branch.capacity]),
-        closedLine ? el('span', {}, [closedLine]) : null,
-      ]),
-    ]));
-  });
-  card.appendChild(grid);
-
-  card.appendChild(el('div', { class: 'btn-row' }, [
-    el('button', {
-      class: 'btn btn-primary', disabled: !state.cBranch,
-      onClick: () => { if (state.cBranch) { state.cStep = 2; fetchSlots(); render(); } },
-    }, [t('next')]),
-  ]));
-  return card;
-}
-
-async function fetchSlots() {
-  state.cSlotsLoading = true;
-  state.cSlots = null;
-  render();
-  try {
-    const url = '/api/availability?branch=' + encodeURIComponent(state.cBranch) +
-      '&date=' + encodeURIComponent(state.cDate) + '&guests=' + encodeURIComponent(state.cGuests);
-    const result = await apiFetch('GET', url);
-    state.cSlotsClosed = result.closed;
-    state.cSlots = result.slots;
-  } catch (err) {
-    state.cSlots = [];
-    state.cSlotsClosed = false;
-  }
-  state.cSlotsLoading = false;
-  render();
-}
-
-function renderStepTime() {
-  const branch = getBranch(state.cBranch);
-  const card = el('div', { class: 'card' });
-  card.appendChild(el('h2', {}, [t('dateGuests')]));
-
   const row = el('div', { class: 'field-row' });
+
+  // Branch — a plain dropdown, not a card grid.
+  const branchField = el('div', { class: 'field' }, [el('label', {}, [t('stepBranch')])]);
+  const branchSelect = el('select', {
+    onChange: (e) => {
+      state.cBranch = e.target.value || null;
+      state.cTime = null;
+      fetchSlots();
+    },
+  });
+  branchSelect.appendChild(el('option', { value: '' }, ['— ' + t('chooseBranch') + ' —']));
+  state.config.branches.forEach((branch) => {
+    const option = el('option', { value: branch.id }, [branch.name + ' — ' + branch.city]);
+    if (state.cBranch === branch.id) option.setAttribute('selected', 'selected');
+    branchSelect.appendChild(option);
+  });
+  branchField.appendChild(branchSelect);
+  row.appendChild(branchField);
+
+  // Date
   row.appendChild(el('div', { class: 'field' }, [
     el('label', {}, [t('date')]),
     el('input', {
@@ -102,6 +75,7 @@ function renderStepTime() {
     }),
   ]));
 
+  // Guests
   const guestsField = el('div', { class: 'field' }, [el('label', {}, [t('guests')])]);
   const stepper = el('div', { class: 'stepper' });
   stepper.appendChild(el('button', {
@@ -113,14 +87,26 @@ function renderStepTime() {
   }, ['+']));
   guestsField.appendChild(stepper);
   row.appendChild(guestsField);
+
   card.appendChild(row);
+
+  // Branch detail line (hours / capacity / closed day) once one is picked.
+  if (state.cBranch) {
+    const branch = getBranch(state.cBranch);
+    const closedLine = branch.closedDay !== null ? (' · ' + t('closedOn') + ': ' + DAY_NAMES[branch.closedDay]) : '';
+    card.appendChild(el('div', { class: 'hint', style: 'margin-top:-8px;margin-bottom:16px;' }, [
+      t('hoursLabel') + ': ' + state.config.openTime + '–' + state.config.closeTime + closedLine,
+    ]));
+  }
 
   card.appendChild(el('h2', { style: 'margin-top:8px;' }, [t('availableTimes')]));
 
-  if (state.cSlotsLoading) {
+  if (!state.cBranch) {
+    card.appendChild(el('div', { class: 'hint' }, [t('chooseBranchHint')]));
+  } else if (state.cSlotsLoading) {
     card.appendChild(el('div', { class: 'spinner-row' }, [el('div', { class: 'spinner' }), el('span', {}, [t('loading')])]));
   } else if (state.cSlotsClosed) {
-    card.appendChild(el('div', { class: 'msg error' }, [branch.name + ' — ' + t('closedOn') + ' (' + state.cDate + ').']));
+    card.appendChild(el('div', { class: 'msg error' }, [getBranch(state.cBranch).name + ' — ' + t('closedOn') + ' (' + state.cDate + ').']));
   } else if (state.cSlots) {
     if (state.cSlots.length === 0) {
       card.appendChild(el('div', { class: 'msg error' }, [t('noTimes')]));
@@ -143,15 +129,35 @@ function renderStepTime() {
     }
   }
 
-  card.appendChild(el('div', { class: 'btn-row split' }, [
-    el('button', { class: 'btn btn-ghost', onClick: () => { state.cStep = 1; render(); } }, [t('back')]),
+  card.appendChild(el('div', { class: 'btn-row' }, [
     el('button', {
-      class: 'btn btn-primary', disabled: !state.cTime,
-      onClick: () => { if (state.cTime) { state.cStep = 3; render(); } },
+      class: 'btn btn-primary', disabled: !state.cBranch || !state.cTime,
+      onClick: () => { if (state.cBranch && state.cTime) { state.cStep = 2; render(); } },
     }, [t('next')]),
   ]));
   return card;
 }
+
+async function fetchSlots() {
+  if (!state.cBranch) { state.cSlots = null; render(); return; }
+  state.cSlotsLoading = true;
+  state.cSlots = null;
+  render();
+  try {
+    const url = '/api/availability?branch=' + encodeURIComponent(state.cBranch) +
+      '&date=' + encodeURIComponent(state.cDate) + '&guests=' + encodeURIComponent(state.cGuests);
+    const result = await apiFetch('GET', url);
+    state.cSlotsClosed = result.closed;
+    state.cSlots = result.slots;
+  } catch (err) {
+    state.cSlots = [];
+    state.cSlotsClosed = false;
+  }
+  state.cSlotsLoading = false;
+  render();
+}
+
+// ---------- Step 2: guest details ----------
 
 function renderStepDetails() {
   const card = el('div', { class: 'card' });
@@ -225,7 +231,7 @@ function renderStepDetails() {
   card.appendChild(consentLine);
 
   card.appendChild(el('div', { class: 'btn-row split' }, [
-    el('button', { class: 'btn btn-ghost', onClick: () => { state.cStep = 2; render(); } }, [t('back')]),
+    el('button', { class: 'btn btn-ghost', onClick: () => { state.cStep = 1; render(); } }, [t('back')]),
     el('button', {
       class: 'btn btn-primary', disabled: state.cSubmitting, onClick: submitBooking,
     }, [state.cSubmitting ? '…' : t('confirmBooking')]),
@@ -249,19 +255,18 @@ async function submitBooking() {
       name: state.cForm.name.trim(), email: state.cForm.email.trim(), phone: state.cForm.phone.trim(),
       notes: state.cForm.notes.trim(), allergy: state.cForm.allergy.trim(), childSeat: state.cForm.childSeat,
       privacyConsentAt: new Date().toISOString(), allergyConsent: !!state.cForm.allergyConsent,
-      policyVersion: 'v1-2026-09',
+      policyVersion: 'v1-2026-09', lang: state.lang,
     });
     if (!result.ok) {
       state.cError = t('connectionError');
       state.cSubmitting = false;
-      await fetchSlots();
       return;
     }
     state.cRef = {
       ref: result.ref, branch: state.cBranch, date: state.cDate, time: state.cTime,
       guests: state.cGuests, name: state.cForm.name.trim(), waitlisted: !!result.waitlisted,
     };
-    state.cStep = 4;
+    state.cStep = 3;
   } catch (err) {
     state.cError = t('connectionError');
   }

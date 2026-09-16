@@ -5,7 +5,6 @@
 
 import { el } from '../dom.js';
 import { state } from '../state.js';
-import { t } from '../i18n.js';
 import { render } from '../render.js';
 
 export function renderTopbar() {
@@ -19,26 +18,28 @@ export function renderTopbar() {
 
   const nav = el('div', { class: 'topbar-nav' });
 
-  nav.appendChild(el('button', {
-    class: 'nav-btn' + (state.view === 'customer' ? ' active' : ''),
-    onClick: () => { state.view = 'customer'; render(); },
-  }, [t('reserve')]));
-
-  nav.appendChild(el('button', {
-    class: 'nav-btn' + (state.view !== 'customer' ? ' active' : ''),
-    onClick: () => { state.view = state.loggedIn ? 'staffDash' : 'staffLogin'; render(); },
-  }, [t('staff')]));
-
-  const langToggle = el('div', { class: 'lang-toggle' });
-  langToggle.appendChild(el('button', {
-    class: state.lang === 'en' ? 'active' : '',
-    onClick: () => { state.lang = 'en'; render(); },
-  }, ['EN']));
-  langToggle.appendChild(el('button', {
-    class: state.lang === 'de' ? 'active' : '',
-    onClick: () => { state.lang = 'de'; render(); },
-  }, ['DE']));
-  nav.appendChild(langToggle);
+  if (state.appMode === 'customer') {
+    // The customer-facing site deliberately has no visible link to the
+    // staff/admin login — that lives at its own separate /staff URL,
+    // shared only with staff, not advertised to diners.
+    const langToggle = el('div', { class: 'lang-toggle' });
+    langToggle.appendChild(el('button', {
+      class: state.lang === 'en' ? 'active' : '',
+      onClick: () => { state.lang = 'en'; render(); },
+    }, ['EN']));
+    langToggle.appendChild(el('button', {
+      class: state.lang === 'de' ? 'active' : '',
+      onClick: () => { state.lang = 'de'; render(); },
+    }, ['DE']));
+    nav.appendChild(langToggle);
+  } else {
+    // Staff/admin site: a quiet link back to the public booking page,
+    // no language toggle (this side is English-only, see i18n.js).
+    nav.appendChild(el('a', {
+      href: '/', class: 'nav-btn',
+      style: 'text-decoration:none;display:inline-flex;align-items:center;',
+    }, ['View booking site']));
+  }
 
   inner.appendChild(nav);
   bar.appendChild(inner);

@@ -21,24 +21,21 @@ export function renderStaffLogin() {
 
   if (state.loginError) wrap.appendChild(el('div', { class: 'msg error' }, [state.loginError]));
 
-  const grid = el('div', { class: 'pin-grid' });
-  state.config.branches.forEach((branch) => {
-    grid.appendChild(el('button', {
-      class: 'pin-branch' + (state.staffLoginTarget === branch.id ? ' selected' : ''),
-      onClick: () => { state.staffLoginTarget = branch.id; render(); },
-    }, [
-      el('div', { style: 'font-weight:600;' }, [branch.name]),
-      el('div', { style: 'font-size:12px;color:#6b7770;' }, [branch.city]),
-    ]));
+  const targetField = el('div', { class: 'field' }, [el('label', {}, ['Branch'])]);
+  const targetSelect = el('select', {
+    onChange: (e) => { state.staffLoginTarget = e.target.value || null; },
   });
-  grid.appendChild(el('button', {
-    class: 'pin-branch' + (state.staffLoginTarget === 'admin' ? ' selected' : ''),
-    onClick: () => { state.staffLoginTarget = 'admin'; render(); },
-  }, [
-    el('div', { style: 'font-weight:600;' }, ['Administrator']),
-    el('div', { style: 'font-size:12px;color:#6b7770;' }, ['All branches']),
-  ]));
-  wrap.appendChild(grid);
+  targetSelect.appendChild(el('option', { value: '' }, ['— Select —']));
+  state.config.branches.forEach((branch) => {
+    const option = el('option', { value: branch.id }, [branch.name + ' — ' + branch.city]);
+    if (state.staffLoginTarget === branch.id) option.setAttribute('selected', 'selected');
+    targetSelect.appendChild(option);
+  });
+  const adminOption = el('option', { value: 'admin' }, ['Administrator — All branches']);
+  if (state.staffLoginTarget === 'admin') adminOption.setAttribute('selected', 'selected');
+  targetSelect.appendChild(adminOption);
+  targetField.appendChild(targetSelect);
+  wrap.appendChild(targetField);
 
   wrap.appendChild(el('div', { class: 'field', style: 'margin-top:18px;' }, [
     el('label', {}, ['PIN']),

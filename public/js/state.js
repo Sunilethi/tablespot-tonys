@@ -15,6 +15,7 @@ export function todayISO() {
 
 export const state = {
   // ui
+  appMode: 'customer', // 'customer' | 'staff' — set once at boot from the URL path (see main.js)
   lang: 'en',
   view: 'customer', // 'customer' | 'staffLogin' | 'staffDash'
   config: null,

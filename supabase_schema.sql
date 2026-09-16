@@ -29,7 +29,7 @@ create table if not exists branches (
   capacity int not null default 50,
   pin text not null,
   blocked_dates jsonb not null default '[]'::jsonb,
-  capacity_overrides jsonb not null default '{}'::jsonb
+  capacity_overrides jsonb not null default '[]'::jsonb
 );
 
 create table if not exists bookings (
@@ -48,6 +48,7 @@ create table if not exists bookings (
   child_seat boolean not null default false,
   status text not null default 'pending',       -- pending/confirmed/arrived/seated/completed/cancelled/no_show/waitlisted
   source text not null default 'website',       -- website/phone/walk_in
+  lang text not null default 'en',               -- 'en' or 'de' — which language to email the guest in
   staff_notes text default '',
   privacy_consent_at timestamptz,               -- when the guest accepted the privacy policy (website bookings)
   allergy_consent boolean not null default false, -- separate explicit consent for Art. 9 GDPR health data
@@ -79,9 +80,9 @@ on conflict (id) do nothing;
 
 insert into branches (id, restaurant_id, name, city, address, phone, closed_day, capacity, pin, blocked_dates, capacity_overrides)
 values
-  ('steglitz',   'tonys', 'Tony''s Pizzeria & Ristorante', 'Berlin (Steglitz)', 'Albrechtstr. 80, 12167 Berlin',        '030 53798911',   1,    60, '1111', '[]', '{}'),
-  ('stahnsdorf', 'tonys', 'Tony''s Pizzeria Stahnsdorf',   'Stahnsdorf',        'Potsdamer Allee 109a, 14532 Stahnsdorf','0176 24139753',  2,    80, '2222', '[]', '{}'),
-  ('airport',    'tonys', 'Tony''s Pizzeria Airport',      'Schönefeld (BER)',  'Am Flughafen 13, 12529 Schönefeld',    '030 33930777',   null, 70, '3333', '[]', '{}')
+  ('steglitz',   'tonys', 'Tony''s Pizzeria & Ristorante', 'Berlin (Steglitz)', 'Albrechtstr. 80, 12167 Berlin',        '030 53798911',   1,    60, '1111', '[]', '[]'),
+  ('stahnsdorf', 'tonys', 'Tony''s Pizzeria Stahnsdorf',   'Stahnsdorf',        'Potsdamer Allee 109a, 14532 Stahnsdorf','0176 24139753',  2,    80, '2222', '[]', '[]'),
+  ('airport',    'tonys', 'Tony''s Pizzeria Airport',      'Schönefeld (BER)',  'Am Flughafen 13, 12529 Schönefeld',    '030 33930777',   null, 70, '3333', '[]', '[]')
 on conflict (id) do nothing;
 
 -- closed_day: null = open every day, 0=Sun 1=Mon 2=Tue 3=Wed 4=Thu 5=Fri 6=Sat
@@ -95,3 +96,19 @@ on conflict (id) do nothing;
 -- NOTE ON RETENTION: this schema does not auto-delete old bookings. Decide
 -- a retention period (see Datenschutzerklaerung.md §6) and either delete
 -- old rows manually/periodically, or ask for a scheduled cleanup job later.
+
+-- MIGRATION: if you already ran this file once (before the "lang" column
+-- existed on bookings), run this line too:
+--
+--   alter table bookings add column if not exists lang text not null default 'en';
+
+-- MIGRATION: if you already ran this file before capacity_overrides
+-- changed from a whole-day-only object ('{}') to a list that supports
+-- specific time windows ('[]'), run this one line to reset any existing
+-- (empty, since no overrides had been set yet) values to the new format:
+--
+--   update branches set capacity_overrides = '[]'::jsonb where capacity_overrides = '{}'::jsonb;
+--
+-- (If you'd already added real overrides using the old whole-day format,
+-- let me know and I'll write a proper data-preserving migration instead
+-- of this reset.)

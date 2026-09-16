@@ -11,8 +11,9 @@ export function renderTopbar() {
   const bar = el('div', { class: 'topbar' });
   const inner = el('div', { class: 'topbar-inner' });
 
+  const logoSrc = state.appMode === 'staff' ? '/images/tonys-logo-white.png' : '/images/tonys-logo.png';
   inner.appendChild(el('div', { class: 'brand' }, [
-    el('span', { class: 'mark' }, ["Tony's"]),
+    el('img', { src: logoSrc, alt: "Tony's", class: 'brand-logo' }),
     el('span', { class: 'sub' }, ['RESERVATIONS']),
   ]));
 

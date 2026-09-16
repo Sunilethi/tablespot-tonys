@@ -23,7 +23,7 @@ export function renderStaffLogin() {
 
   const targetField = el('div', { class: 'field' }, [el('label', {}, ['Branch'])]);
   const targetSelect = el('select', {
-    onChange: (e) => { state.staffLoginTarget = e.target.value || null; },
+    onChange: (e) => { state.staffLoginTarget = e.target.value || null; render(); },
   });
   targetSelect.appendChild(el('option', { value: '' }, ['— Select —']));
   state.config.branches.forEach((branch) => {

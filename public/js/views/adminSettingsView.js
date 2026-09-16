@@ -113,33 +113,52 @@ function renderBlockedDatesField(branch) {
 
 function renderCapacityOverridesField(branch) {
   const wrap = el('div', {});
-  wrap.appendChild(el('label', { style: 'margin-top:14px;display:block;' }, ['Event capacity override (specific date)']));
+  wrap.appendChild(el('label', { style: 'margin-top:14px;display:block;' }, ['Event capacity override (specific date, optionally a specific time window)']));
+  wrap.appendChild(el('div', { class: 'hint', style: 'margin:2px 0 8px;' }, ['Leave the time fields blank to override the whole day. Set both to limit it to a window, e.g. 18:00–22:00 for an evening event.']));
 
-  const overrides = branch.capacityOverrides || {};
+  const overrides = branch.capacityOverrides || [];
   const tagList = el('div', { class: 'tag-list' });
-  Object.keys(overrides).forEach((date) => {
+  overrides.forEach((override, index) => {
+    const windowLabel = (override.startTime && override.endTime)
+      ? `${override.startTime}–${override.endTime}`
+      : 'all day';
     tagList.appendChild(el('span', { class: 'tag' }, [
-      `${date}: ${overrides[date]} seats`,
+      `${override.date} (${windowLabel}): ${override.capacity} seats`,
       el('button', {
-        onClick: () => { delete branch.capacityOverrides[date]; pushBranchSettings(branch); },
+        onClick: () => {
+          branch.capacityOverrides = branch.capacityOverrides.filter((_, i) => i !== index);
+          pushBranchSettings(branch);
+        },
       }, ['×']),
     ]));
   });
   wrap.appendChild(tagList);
 
-  const row = el('div', { style: 'display:flex;gap:8px;margin-top:8px;' });
-  const dateInput = el('input', { type: 'date', style: 'flex:1;padding:8px;border:1px solid var(--line);border-radius:4px;' });
-  const capacityInput = el('input', { type: 'number', placeholder: 'Seats', style: 'width:90px;padding:8px;border:1px solid var(--line);border-radius:4px;' });
-  row.appendChild(dateInput);
-  row.appendChild(capacityInput);
+  const row = el('div', { style: 'display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;align-items:flex-end;' });
+  const inputStyle = 'padding:8px;border:1px solid var(--line);border-radius:4px;';
+
+  const dateInput = el('input', { type: 'date', style: inputStyle + 'flex:1;min-width:130px;' });
+  const startInput = el('input', { type: 'time', style: inputStyle + 'width:110px;' });
+  const endInput = el('input', { type: 'time', style: inputStyle + 'width:110px;' });
+  const capacityInput = el('input', { type: 'number', placeholder: 'Seats', style: inputStyle + 'width:90px;' });
+
+  row.appendChild(el('div', {}, [el('div', { class: 'hint', style: 'margin-bottom:4px;' }, ['Date']), dateInput]));
+  row.appendChild(el('div', {}, [el('div', { class: 'hint', style: 'margin-bottom:4px;' }, ['From (optional)']), startInput]));
+  row.appendChild(el('div', {}, [el('div', { class: 'hint', style: 'margin-bottom:4px;' }, ['To (optional)']), endInput]));
+  row.appendChild(el('div', {}, [el('div', { class: 'hint', style: 'margin-bottom:4px;' }, ['Capacity']), capacityInput]));
   wrap.appendChild(row);
 
   wrap.appendChild(el('button', {
     class: 'btn btn-ghost', style: 'padding:8px 12px;font-size:12.5px;margin-top:8px;',
     onClick: () => {
       if (!dateInput.value || !capacityInput.value) return;
-      branch.capacityOverrides = branch.capacityOverrides || {};
-      branch.capacityOverrides[dateInput.value] = Number(capacityInput.value);
+      const hasWindow = !!(startInput.value && endInput.value);
+      branch.capacityOverrides = branch.capacityOverrides || [];
+      branch.capacityOverrides.push({
+        date: dateInput.value,
+        capacity: Number(capacityInput.value),
+        ...(hasWindow ? { startTime: startInput.value, endTime: endInput.value } : {}),
+      });
       pushBranchSettings(branch);
     },
   }, ['Set override']));

@@ -5,7 +5,7 @@
  */
 
 import { el } from '../dom.js';
-import { state, getBranch } from '../state.js';
+import { state, getBranch, todayISO } from '../state.js';
 import { STATUS_LABELS } from '../i18n.js';
 import { t } from '../i18n.js';
 import { apiFetch } from '../api.js';
@@ -62,8 +62,14 @@ export function renderStaffDash() {
     return wrap;
   }
 
-  wrap.appendChild(renderBookingsPanel(isAdmin));
+  const layout = el('div', { class: 'dash-layout' });
+  layout.appendChild(el('div', { class: 'dash-sidebar' }, [renderWeeklyChart()]));
+  layout.appendChild(el('div', { class: 'dash-main' }, [renderBookingsPanel(isAdmin)]));
+  wrap.appendChild(layout);
+
   if (state.showAddForm) wrap.appendChild(renderAddBookingModal());
+  const selectedBooking = state.dashBookings.find((b) => b.id === state.selectedBookingId);
+  if (selectedBooking) wrap.appendChild(renderBookingDetailPanel(selectedBooking, isAdmin));
   return wrap;
 }
 
@@ -81,6 +87,67 @@ export async function refreshDashBookings() {
   }
   state.dashLoading = false;
   render();
+}
+
+/**
+ * Guests booked per day for the last 7 days (today and the 6 days before
+ * it), for the "This week" sidebar chart. Fetched once after login —
+ * not tied to whichever date the main list happens to be showing.
+ */
+export async function fetchWeeklyActivity() {
+  const isAdmin = state.staffBranchId === null;
+  const branchParam = isAdmin ? 'all' : state.staffBranchId;
+
+  const dates = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    dates.push(d.toISOString().slice(0, 10));
+  }
+
+  const results = await Promise.all(dates.map(async (date) => {
+    try {
+      const url = '/api/bookings?branchId=' + encodeURIComponent(branchParam) + '&date=' + encodeURIComponent(date);
+      const bookings = await apiFetch('GET', url, undefined, true);
+      const guests = bookings
+        .filter((b) => ACTIVE_STATUSES.includes(b.status))
+        .reduce((sum, b) => sum + Number(b.guests || 0), 0);
+      return { date, guests };
+    } catch (err) {
+      return { date, guests: 0 };
+    }
+  }));
+
+  state.dashWeeklyActivity = results;
+  render();
+}
+
+function renderWeeklyChart() {
+  const card = el('div', { class: 'card' });
+  card.appendChild(el('h2', { style: 'font-size:15px;margin-bottom:2px;' }, ['This week']));
+  card.appendChild(el('div', { class: 'hint', style: 'margin-bottom:16px;' }, ['Guests booked, last 7 days']));
+
+  if (!state.dashWeeklyActivity) {
+    card.appendChild(el('div', { class: 'spinner-row' }, [el('div', { class: 'spinner' })]));
+    return card;
+  }
+
+  const maxGuests = Math.max(1, ...state.dashWeeklyActivity.map((d) => d.guests));
+  const chart = el('div', { class: 'week-chart' });
+  state.dashWeeklyActivity.forEach((day) => {
+    const pct = Math.max(4, Math.round((day.guests / maxGuests) * 100));
+    const isToday = day.date === todayISO();
+    const dayLabel = new Date(day.date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short' });
+    chart.appendChild(el('div', { class: 'week-chart-col' }, [
+      el('div', { class: 'week-chart-value' }, [String(day.guests)]),
+      el('div', { class: 'week-chart-track' }, [
+        el('div', { class: 'week-chart-bar' + (isToday ? ' today' : ''), style: 'height:' + pct + '%;' }),
+      ]),
+      el('div', { class: 'week-chart-label' + (isToday ? ' today' : '') }, [dayLabel]),
+    ]));
+  });
+  card.appendChild(chart);
+  return card;
 }
 
 function renderBookingsPanel(isAdmin) {
@@ -115,7 +182,7 @@ function renderBookingsPanel(isAdmin) {
   const totalGuests = activeBookings.reduce((sum, b) => sum + Number(b.guests || 0), 0);
 
   container.appendChild(renderStatsRow(bookings, totalGuests));
-  container.appendChild(renderBookingsTable(bookings, isAdmin));
+  container.appendChild(renderBookingsTimeline(bookings, isAdmin));
   return container;
 }
 
@@ -130,81 +197,127 @@ function renderStatsRow(bookings, totalGuests) {
   return stats;
 }
 
-function renderBookingsTable(bookings, isAdmin) {
-  const table = el('table', { class: 'bookings' });
-  const columnCount = isAdmin ? 9 : 8;
+/** Guest initials for the avatar circle, e.g. "Claudia Hauser" -> "CH". */
+function initialsOf(name) {
+  const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+  const letters = parts.slice(0, 2).map((p) => p[0].toUpperCase());
+  return letters.join('') || '?';
+}
 
-  table.appendChild(el('thead', {}, [el('tr', {}, [
-    el('th', {}, ['Time']), el('th', {}, ['Guests']), el('th', {}, ['Name']),
-    isAdmin ? el('th', {}, ['Branch']) : null,
-    el('th', {}, ['Contact']), el('th', {}, ['Notes']), el('th', {}, ['Source']),
-    el('th', {}, ['Status']), el('th', {}, ['Actions']),
-  ].filter(Boolean))]));
+function renderBookingsTimeline(bookings, isAdmin) {
+  const wrap = el('div', { class: 'timeline' });
 
-  const tbody = el('tbody', {});
   if (bookings.length === 0) {
-    tbody.appendChild(el('tr', { class: 'empty-row' }, [el('td', { colspan: columnCount }, ['No reservations for this date yet.'])]));
-  } else {
-    bookings.forEach((booking) => tbody.appendChild(renderBookingRow(booking, isAdmin)));
+    wrap.appendChild(el('div', { class: 'timeline-empty' }, ['No reservations for this date yet.']));
+    return wrap;
   }
-  table.appendChild(tbody);
-  return table;
+
+  let lastTime = null;
+  bookings.forEach((booking) => {
+    if (booking.time !== lastTime) {
+      wrap.appendChild(el('div', { class: 'timeline-time-header' }, [booking.time]));
+      lastTime = booking.time;
+    }
+    wrap.appendChild(renderBookingCard(booking, isAdmin));
+  });
+  return wrap;
 }
 
-function renderBookingRow(booking, isAdmin) {
-  const notesBits = [];
-  if (booking.notes) notesBits.push(booking.notes);
-  if (booking.allergy) notesBits.push('Allergy: ' + booking.allergy);
-  if (booking.childSeat) notesBits.push('Child seat');
+function renderBookingCard(booking, isAdmin) {
+  const badges = [];
+  if (booking.allergy) badges.push(el('span', { class: 'badge-icon', title: 'Allergy: ' + booking.allergy }, ['\u26A0\uFE0F']));
+  if (booking.childSeat) badges.push(el('span', { class: 'badge-icon', title: 'Child seat requested' }, ['\uD83D\uDC76']));
+  if (booking.source === 'phone') badges.push(el('span', { class: 'badge-icon', title: 'Booked by phone' }, ['\u260E\uFE0F']));
+  if (booking.source === 'walk_in') badges.push(el('span', { class: 'badge-icon', title: 'Walk-in' }, ['\uD83D\uDEB6']));
 
-  return el('tr', {}, [
-    el('td', {}, [booking.time]),
-    el('td', {}, [String(booking.guests)]),
-    el('td', {}, [
-      el('div', { style: 'font-weight:600;' }, [booking.name]),
-      el('div', { style: 'font-size:11px;color:#8a8477;' }, [booking.ref]),
+  const subBits = [booking.guests + ' guests'];
+  if (isAdmin) {
+    const branch = getBranch(booking.branch);
+    if (branch) subBits.push(branch.city);
+  }
+  if (booking.phone) subBits.push(booking.phone);
+
+  return el('div', {
+    class: 'booking-card status-edge-' + booking.status,
+    onClick: () => { state.selectedBookingId = booking.id; render(); },
+  }, [
+    el('div', { class: 'avatar-circle' }, [initialsOf(booking.name)]),
+    el('div', { class: 'booking-card-main' }, [
+      el('div', { class: 'booking-card-name' }, [booking.name, ...badges]),
+      el('div', { class: 'booking-card-sub' }, [subBits.join(' · ')]),
     ]),
-    isAdmin ? el('td', {}, [getBranch(booking.branch) ? getBranch(booking.branch).city : booking.branch]) : null,
-    el('td', {}, [
-      el('div', {}, [booking.phone || '—']),
-      el('div', { style: 'font-size:11px;color:#8a8477;' }, [booking.email || '']),
-    ]),
-    el('td', { style: 'max-width:180px;white-space:normal;' }, [notesBits.join(' · ') || '—']),
-    el('td', {}, [booking.source]),
-    el('td', {}, [el('span', { class: 'status-badge status-' + booking.status }, [statusLabel(booking.status)])]),
-    el('td', {}, [renderRowActions(booking)]),
-  ].filter(Boolean));
+    el('span', { class: 'status-badge status-' + booking.status }, [statusLabel(booking.status)]),
+  ]);
 }
 
-function renderRowActions(booking) {
-  const wrap = el('div', { class: 'row-actions' });
+function renderBookingDetailPanel(booking, isAdmin) {
+  const branch = getBranch(booking.branch);
+  const close = () => { state.selectedBookingId = null; render(); };
 
-  const select = el('select', { onChange: (e) => updateStatus(booking.id, e.target.value) });
+  const backdrop = el('div', {
+    class: 'modal-backdrop',
+    onClick: (e) => { if (e.target === e.currentTarget) close(); },
+  });
+  const modal = el('div', { class: 'modal' });
+
+  modal.appendChild(el('div', { style: 'display:flex;justify-content:space-between;align-items:flex-start;' }, [
+    el('div', {}, [
+      el('h2', { style: 'margin-bottom:2px;' }, [booking.name]),
+      el('div', { class: 'hint' }, [(branch ? branch.name + ' — ' : '') + booking.date + ' · ' + booking.time + ' · ' + booking.guests + ' guests']),
+    ]),
+    el('button', {
+      onClick: close, style: 'background:none;border:none;font-size:22px;line-height:1;cursor:pointer;color:#6b7770;',
+    }, ['\u00D7']),
+  ]));
+
+  modal.appendChild(el('div', { class: 'hint', style: 'margin-top:10px;' }, ['Reference: ' + booking.ref]));
+
+  const contactRow = el('div', { class: 'field-row', style: 'margin-top:16px;' });
+  contactRow.appendChild(el('div', { class: 'field' }, [el('label', {}, ['Phone']), el('div', {}, [booking.phone || '—'])]));
+  contactRow.appendChild(el('div', { class: 'field' }, [el('label', {}, ['Email']), el('div', {}, [booking.email || '—'])]));
+  modal.appendChild(contactRow);
+
+  if (booking.notes) modal.appendChild(el('div', { class: 'field' }, [el('label', {}, ['Special requests']), el('div', {}, [booking.notes])]));
+  if (booking.allergy) modal.appendChild(el('div', { class: 'field' }, [el('label', {}, ['Allergy / dietary']), el('div', {}, [booking.allergy])]));
+  if (booking.childSeat) modal.appendChild(el('div', { class: 'field' }, [el('div', { class: 'hint' }, ['Child seat requested'])]));
+
+  const statusField = el('div', { class: 'field' }, [el('label', {}, ['Status'])]);
+  const statusSelect = el('select', {
+    onChange: (e) => { updateStatus(booking.id, e.target.value); },
+  });
   STATUS_LABELS.forEach((status) => {
     const option = el('option', { value: status }, [statusLabel(status)]);
     if (status === booking.status) option.setAttribute('selected', 'selected');
-    select.appendChild(option);
+    statusSelect.appendChild(option);
   });
-  wrap.appendChild(select);
+  statusField.appendChild(statusSelect);
+  modal.appendChild(statusField);
 
-  if (booking.status !== 'cancelled') {
-    wrap.appendChild(el('button', {
-      class: 'danger',
-      onClick: () => {
-        const confirmed = confirm(`Cancel this reservation for ${booking.name} at ${booking.time}? This frees up the table.`);
-        if (confirmed) updateStatus(booking.id, 'cancelled');
-      },
-    }, ['Cancel']));
-  }
-
-  wrap.appendChild(el('button', {
+  const actions = el('div', { class: 'btn-row split', style: 'margin-top:20px;' });
+  actions.appendChild(el('button', {
     onClick: () => {
       const confirmed = confirm('Permanently delete this reservation? This cannot be undone.');
-      if (confirmed) removeBooking(booking.id);
+      if (confirmed) { removeBooking(booking.id); close(); }
     },
+    style: 'background:none;border:1px solid #ECC6BC;color:var(--brick);border-radius:999px;padding:10px 18px;font-size:13px;',
   }, ['Delete']));
 
-  return wrap;
+  const rightActions = el('div', { style: 'display:flex;gap:10px;' });
+  if (booking.status !== 'cancelled') {
+    rightActions.appendChild(el('button', {
+      class: 'btn btn-ghost',
+      onClick: () => {
+        const confirmed = confirm(`Cancel this reservation for ${booking.name} at ${booking.time}? This frees up the table.`);
+        if (confirmed) { updateStatus(booking.id, 'cancelled'); close(); }
+      },
+    }, ['Cancel booking']));
+  }
+  rightActions.appendChild(el('button', { class: 'btn btn-primary', onClick: close }, ['Done']));
+  actions.appendChild(rightActions);
+  modal.appendChild(actions);
+
+  backdrop.appendChild(modal);
+  return backdrop;
 }
 
 async function updateStatus(id, status) {

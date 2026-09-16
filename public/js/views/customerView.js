@@ -15,7 +15,6 @@ import { render } from '../render.js';
 export function renderCustomer() {
   const wrap = el('div', {});
   wrap.appendChild(el('div', { class: 'hero' }, [
-    el('div', { class: 'eyebrow' }, [t('heroEyebrow')]),
     el('h1', {}, [t('heroTitle')]),
     el('p', {}, [t('heroBody')]),
     el('div', { class: 'hero-rule' }),

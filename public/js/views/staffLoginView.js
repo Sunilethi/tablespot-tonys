@@ -9,7 +9,7 @@ import { state } from '../state.js';
 import { t } from '../i18n.js';
 import { apiFetch } from '../api.js';
 import { render } from '../render.js';
-import { refreshDashBookings } from './staffDashboardView.js';
+import { refreshDashBookings, fetchWeeklyActivity } from './staffDashboardView.js';
 
 export function renderStaffLogin() {
   const wrap = el('div', { class: 'login-wrap' });
@@ -78,6 +78,7 @@ async function attemptLogin() {
       }
 
       await refreshDashBookings();
+      fetchWeeklyActivity(); // don't block login on this — it fills in once ready
       return;
     }
     state.loginError = 'Incorrect PIN. Please try again.';

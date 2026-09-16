@@ -55,7 +55,6 @@ async function getAvailability(branchId, date, partySize) {
     return { closed: true, slots: [] };
   }
 
-  const capacity = configService.capacityForDate(branch, date);
   const openMinutes = toMinutes(restaurantConfig.openTime);
   const closeMinutes = toMinutes(restaurantConfig.closeTime);
   const durationMinutes = restaurantConfig.bookingDurationMinutes;
@@ -68,6 +67,7 @@ async function getAvailability(branchId, date, partySize) {
   const slots = [];
   for (let slotStart = openMinutes; slotStart + durationMinutes <= closeMinutes; slotStart += intervalMinutes) {
     if (isToday && slotStart < nowMinutes) continue;
+    const capacity = configService.capacityForSlot(branch, date, slotStart);
     const bookedGuests = await guestsOverlappingSlot(branchId, date, slotStart, durationMinutes, null);
     const remaining = capacity - bookedGuests;
     slots.push({
@@ -97,8 +97,8 @@ async function createBooking(bookingInput, { isStaffBooking = false, source = 'w
     return { ok: false, error: 'CLOSED' };
   }
 
-  const capacity = configService.capacityForDate(branch, bookingInput.date);
   const startMinutes = toMinutes(bookingInput.time);
+  const capacity = configService.capacityForSlot(branch, bookingInput.date, startMinutes);
   const bookedGuests = await guestsOverlappingSlot(
     branch.id, bookingInput.date, startMinutes, restaurantConfig.bookingDurationMinutes, null
   );
@@ -124,6 +124,7 @@ async function createBooking(bookingInput, { isStaffBooking = false, source = 'w
     child_seat: !!bookingInput.childSeat,
     status,
     source,
+    lang: bookingInput.lang === 'de' ? 'de' : 'en',
     staff_notes: '',
     privacy_consent_at: bookingInput.privacyConsentAt || null,
     allergy_consent: !!bookingInput.allergyConsent,
@@ -133,9 +134,10 @@ async function createBooking(bookingInput, { isStaffBooking = false, source = 'w
   if (insertError) throw new Error(insertError.message);
 
   await notifyAboutNewBooking({
-    booking: { ...bookingInput, id, ref },
+    booking: { ...bookingInput, id, ref, lang: bookingInput.lang === 'de' ? 'de' : 'en' },
     branch,
     replyTo: restaurantConfig.replyToEmail,
+    durationMinutes: restaurantConfig.bookingDurationMinutes,
     isWaitlisted: !fitsWithinCapacity,
     notifyStaff: !isStaffBooking, // staff already know — they just created it
   });
@@ -143,12 +145,12 @@ async function createBooking(bookingInput, { isStaffBooking = false, source = 'w
   return { ok: true, ref, id, waitlisted: !fitsWithinCapacity };
 }
 
-async function notifyAboutNewBooking({ booking, branch, replyTo, isWaitlisted, notifyStaff }) {
+async function notifyAboutNewBooking({ booking, branch, replyTo, durationMinutes, isWaitlisted, notifyStaff }) {
   try {
     if (isWaitlisted) {
       await emailService.sendWaitlistNotice({ booking, branch, replyTo });
     } else {
-      await emailService.sendBookingConfirmation({ booking, branch, replyTo });
+      await emailService.sendBookingConfirmation({ booking, branch, replyTo, durationMinutes });
     }
     if (notifyStaff) {
       await emailService.sendStaffNotification({ booking, branch, replyTo, isWaitlisted });
@@ -179,10 +181,9 @@ async function promoteWaitlist(branchId, date) {
     .order('created_at', { ascending: true });
   if (error || !waitlistedBookings) return;
 
-  const capacity = configService.capacityForDate(branch, date);
-
   for (const booking of waitlistedBookings) {
     const startMinutes = toMinutes(booking.time);
+    const capacity = configService.capacityForSlot(branch, date, startMinutes);
     const bookedGuests = await guestsOverlappingSlot(
       branchId, date, startMinutes, restaurantConfig.bookingDurationMinutes, booking.id
     );
@@ -195,9 +196,11 @@ async function promoteWaitlist(branchId, date) {
         booking: {
           ref: booking.ref, date: booking.date, time: booking.time,
           guests: booking.guests, name: booking.name, email: booking.email,
+          lang: booking.lang === 'de' ? 'de' : 'en',
         },
         branch,
         replyTo: restaurantConfig.replyToEmail,
+        durationMinutes: restaurantConfig.bookingDurationMinutes,
       });
     } catch (err) {
       console.error('Waitlist promotion email failed:', err.message);

@@ -5,6 +5,7 @@
 
 const supabase = require('../db/supabaseClient');
 const config = require('../config/env');
+const { toMinutes } = require('../utils/time');
 
 /**
  * Full config for the restaurant, including every branch.
@@ -42,7 +43,12 @@ async function getRestaurantConfig({ includeSecrets = false } = {}) {
     closedDay: row.closed_day === null || row.closed_day === undefined ? null : Number(row.closed_day),
     capacity: Number(row.capacity),
     blockedDates: row.blocked_dates || [],
-    capacityOverrides: row.capacity_overrides || {},
+    // Each entry: { date, capacity, startTime?, endTime? }. When
+    // startTime/endTime are omitted, the override applies to the whole
+    // day; when present, it only applies within that time window (e.g.
+    // a private event from 18:00-22:00 with a higher capacity, while
+    // the rest of the day keeps the branch's normal limit).
+    capacityOverrides: row.capacity_overrides || [],
     ...(includeSecrets ? { pin: String(row.pin) } : {}),
   }));
 
@@ -64,12 +70,28 @@ function findBranch(restaurantConfig, branchId) {
   return restaurantConfig.branches.find((branch) => branch.id === branchId) || null;
 }
 
-/** The effective seat capacity for a branch on a given date, respecting
- *  any per-date override (e.g. a private event with reduced capacity). */
-function capacityForDate(branch, date) {
-  if (branch.capacityOverrides && branch.capacityOverrides[date] !== undefined) {
-    return branch.capacityOverrides[date];
-  }
+/**
+ * The effective seat capacity for a branch at a specific date + time
+ * (given as minutes since midnight). Checks event overrides for that
+ * date, preferring the most specific match: a time-windowed override
+ * that actually covers this slot start time, falling back to a
+ * whole-day override (one with no startTime/endTime), falling back to
+ * the branch's normal standing capacity.
+ */
+function capacityForSlot(branch, date, slotStartMinutes) {
+  const overridesForDate = (branch.capacityOverrides || []).filter((o) => o.date === date);
+
+  const windowed = overridesForDate.find((o) => {
+    if (!o.startTime || !o.endTime) return false;
+    const start = toMinutes(o.startTime);
+    const end = toMinutes(o.endTime);
+    return slotStartMinutes >= start && slotStartMinutes < end;
+  });
+  if (windowed) return windowed.capacity;
+
+  const wholeDay = overridesForDate.find((o) => !o.startTime || !o.endTime);
+  if (wholeDay) return wholeDay.capacity;
+
   return branch.capacity;
 }
 
@@ -112,7 +134,7 @@ async function updateGlobalSettings({ openTime, closeTime, bookingDurationMinute
 module.exports = {
   getRestaurantConfig,
   findBranch,
-  capacityForDate,
+  capacityForSlot,
   isBranchClosedOnDate,
   updateBranchSettings,
   updateGlobalSettings,

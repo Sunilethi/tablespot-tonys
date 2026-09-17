@@ -82,7 +82,7 @@ insert into branches (id, restaurant_id, name, city, address, phone, closed_day,
 values
   ('steglitz',   'tonys', 'Tony''s Pizzeria & Ristorante', 'Berlin (Steglitz)', 'Albrechtstr. 80, 12167 Berlin',        '030 53798911',   1,    60, '1111', '[]', '[]'),
   ('stahnsdorf', 'tonys', 'Tony''s Pizzeria Stahnsdorf',   'Stahnsdorf',        'Potsdamer Allee 109a, 14532 Stahnsdorf','0176 24139753',  2,    80, '2222', '[]', '[]'),
-  ('airport',    'tonys', 'Tony''s Pizzeria Airport',      'Schönefeld (BER)',  'Am Flughafen 13, 12529 Schönefeld',    '030 33930777',   null, 70, '3333', '[]', '[]')
+  ('airport',    'tonys', 'Tony''s Pizzeria Airport',      'Schönefeld (BER)',  'Am Flughafen 13, 12529 Schönefeld',    '030 33930777',   null, 80, '3333', '[]', '[]')
 on conflict (id) do nothing;
 
 -- closed_day: null = open every day, 0=Sun 1=Mon 2=Tue 3=Wed 4=Thu 5=Fri 6=Sat

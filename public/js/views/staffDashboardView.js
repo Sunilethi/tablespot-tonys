@@ -63,7 +63,7 @@ export function renderStaffDash() {
   }
 
   const layout = el('div', { class: 'dash-layout' });
-  layout.appendChild(el('div', { class: 'dash-sidebar' }, [renderWeeklyChart()]));
+  layout.appendChild(el('div', { class: 'dash-sidebar' }, [renderCalendarWidget(), renderWeeklyChart()]));
   layout.appendChild(el('div', { class: 'dash-main' }, [renderBookingsPanel(isAdmin)]));
   wrap.appendChild(layout);
 
@@ -122,6 +122,76 @@ export async function fetchWeeklyActivity() {
   render();
 }
 
+/** Lazily initializes the visible calendar month from the currently
+ *  selected date, the first time the calendar renders. After that, the
+ *  Prev/Next buttons own which month is shown — selecting a date via the
+ *  toolbar's date input further below does NOT yank the calendar back to
+ *  that month, so browsing forward/back isn't fought by re-renders. */
+function ensureCalendarMonthMatchesSelection() {
+  if (!state.calendarMonth) {
+    const selected = new Date(state.dashDate + 'T00:00:00');
+    state.calendarMonth = { year: selected.getFullYear(), month: selected.getMonth() };
+  }
+}
+
+function renderCalendarWidget() {
+  ensureCalendarMonthMatchesSelection();
+  const { year, month } = state.calendarMonth;
+
+  const card = el('div', { class: 'card', style: 'margin-bottom:16px;padding:18px;' });
+
+  const monthLabel = new Date(year, month, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+  const header = el('div', { class: 'cal-header' }, [
+    el('button', {
+      class: 'cal-nav', 'aria-label': 'Previous month',
+      onClick: () => { shiftCalendarMonth(-1); },
+    }, ['\u2039']),
+    el('div', { class: 'cal-month-label' }, [monthLabel]),
+    el('button', {
+      class: 'cal-nav', 'aria-label': 'Next month',
+      onClick: () => { shiftCalendarMonth(1); },
+    }, ['\u203A']),
+  ]);
+  card.appendChild(header);
+
+  const grid = el('div', { class: 'cal-grid' });
+  ['S', 'M', 'T', 'W', 'T', 'F', 'S'].forEach((d) => grid.appendChild(el('div', { class: 'cal-dow' }, [d])));
+
+  const firstOfMonth = new Date(year, month, 1);
+  const startWeekday = firstOfMonth.getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const todayStr = todayISO();
+
+  for (let i = 0; i < startWeekday; i++) grid.appendChild(el('div', { class: 'cal-cell empty' }));
+
+  for (let day = 1; day <= daysInMonth; day++) {
+    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    const isSelected = dateStr === state.dashDate;
+    const isToday = dateStr === todayStr;
+    grid.appendChild(el('button', {
+      class: 'cal-cell' + (isSelected ? ' selected' : '') + (isToday ? ' today' : ''),
+      onClick: () => { state.dashDate = dateStr; refreshDashBookings(); },
+    }, [String(day)]));
+  }
+  card.appendChild(grid);
+
+  card.appendChild(el('button', {
+    class: 'btn btn-ghost', style: 'width:100%;margin-top:10px;padding:8px;font-size:12.5px;',
+    onClick: () => { state.dashDate = todayISO(); state.calendarMonth = null; refreshDashBookings(); },
+  }, ['Today']));
+
+  return card;
+}
+
+function shiftCalendarMonth(delta) {
+  let { year, month } = state.calendarMonth;
+  month += delta;
+  if (month < 0) { month = 11; year -= 1; }
+  if (month > 11) { month = 0; year += 1; }
+  state.calendarMonth = { year, month };
+  render();
+}
+
 function renderWeeklyChart() {
   const card = el('div', { class: 'card' });
   card.appendChild(el('h2', { style: 'font-size:15px;margin-bottom:2px;' }, ['This week']));
@@ -156,7 +226,7 @@ function renderBookingsPanel(isAdmin) {
   const toolbar = el('div', { class: 'dash-toolbar' });
   toolbar.appendChild(el('input', {
     type: 'date', value: state.dashDate,
-    onChange: (e) => { state.dashDate = e.target.value; refreshDashBookings(); },
+    onChange: (e) => { state.dashDate = e.target.value; state.calendarMonth = null; refreshDashBookings(); },
   }));
   toolbar.appendChild(el('input', {
     type: 'text', placeholder: 'Search name, phone or reference', value: state.dashSearch, style: 'min-width:220px;',
@@ -188,12 +258,12 @@ function renderBookingsPanel(isAdmin) {
 
 function renderStatsRow(bookings, totalGuests) {
   const stats = el('div', { class: 'stat-row' });
-  const stat = (n, label) => el('div', { class: 'stat' }, [el('div', { class: 'n' }, [String(n)]), el('div', { class: 'l' }, [label])]);
+  const stat = (n, label, accent) => el('div', { class: 'stat' + (accent ? ' accent-' + accent : '') }, [el('div', { class: 'n' }, [String(n)]), el('div', { class: 'l' }, [label])]);
   stats.appendChild(stat(bookings.length, 'Reservations'));
-  stats.appendChild(stat(totalGuests, 'Guests booked'));
-  stats.appendChild(stat(bookings.filter((b) => b.status === 'pending').length, 'Pending'));
-  stats.appendChild(stat(bookings.filter((b) => b.status === 'waitlisted').length, 'Waitlisted'));
-  stats.appendChild(stat(bookings.filter((b) => b.status === 'no_show').length, 'No-shows'));
+  stats.appendChild(stat(totalGuests, 'Guests booked', 'brick'));
+  stats.appendChild(stat(bookings.filter((b) => b.status === 'pending').length, 'Pending', 'warn'));
+  stats.appendChild(stat(bookings.filter((b) => b.status === 'waitlisted').length, 'Waitlisted', 'gold'));
+  stats.appendChild(stat(bookings.filter((b) => b.status === 'no_show').length, 'No-shows', 'danger'));
   return stats;
 }
 

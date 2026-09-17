@@ -330,7 +330,12 @@ async function submitBooking() {
 function renderConfirmStep() {
   const booking = state.cRef;
   const branch = getBranch(booking.branch);
-  const card = el('div', { class: 'card confirm-box' });
+  const card = el('div', { class: 'card confirm-box', id: 'confirm-print-area' });
+
+  card.appendChild(el('img', {
+    src: '/images/tonys-logo.png', alt: "Tony's",
+    style: 'height:34px;margin:0 auto 18px;display:block;',
+  }));
 
   if (booking.waitlisted) {
     card.appendChild(el('h2', {}, [t('waitlistedTitle')]));
@@ -349,7 +354,30 @@ function renderConfirmStep() {
     el('li', {}, [el('span', {}, [t('summaryName')]), el('span', {}, [booking.name])]),
   ]));
 
-  card.appendChild(el('div', { class: 'btn-row', style: 'justify-content:center;' }, [
+  if (branch.phone) {
+    card.appendChild(el('p', { style: 'color:#6b7770;font-size:13px;margin-top:10px;' }, [
+      (state.lang === 'de' ? 'Fragen? Rufen Sie uns an: ' : 'Questions? Call us: ') + branch.phone,
+    ]));
+  }
+
+  const actionsRow = el('div', { class: 'btn-row', style: 'justify-content:center;flex-wrap:wrap;', 'data-no-print': 'true' });
+  actionsRow.appendChild(el('button', {
+    class: 'btn btn-ghost',
+    onClick: () => window.print(),
+  }, [state.lang === 'de' ? 'Drucken / Als PDF speichern' : 'Print / Save as PDF']));
+
+  if (navigator.share) {
+    actionsRow.appendChild(el('button', {
+      class: 'btn btn-ghost',
+      onClick: () => {
+        const shareText = `${branch.name} — ${booking.date} ${booking.time}, ${booking.guests} guests. Ref: ${booking.ref}`;
+        navigator.share({ title: "Tony's reservation", text: shareText }).catch(() => {});
+      },
+    }, [state.lang === 'de' ? 'Teilen' : 'Share']));
+  }
+  card.appendChild(actionsRow);
+
+  card.appendChild(el('div', { class: 'btn-row', style: 'justify-content:center;', 'data-no-print': 'true' }, [
     el('button', {
       class: 'btn btn-primary',
       onClick: () => {

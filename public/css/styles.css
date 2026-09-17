@@ -17,8 +17,8 @@
     --brick:#8B2E23;
     --brick-dark:#6E2019;
     --gold:#C9A44C;
-    --ivory:#F6F3EC;
-    --ivory-2:#ECE7DA;
+    --ivory:#F2F2F4;
+    --ivory-2:#E7E7EA;
     --paper:#FFFFFF;
     --line: rgba(23,24,26,0.12);
     --ok:#3D7A4E;
@@ -205,10 +205,39 @@
   .dash-toolbar input, .dash-toolbar select{
     padding:9px 12px;border:1px solid var(--line);border-radius:var(--radius);font-size:13.5px;background:var(--paper);
   }
-  .stat-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:18px;}
-  .stat{border:1px solid var(--line);border-radius:var(--radius);background:var(--paper);padding:12px 14px;}
-  .stat .n{font-family:'Inter',sans-serif;font-size:24px;font-weight:600;}
-  .stat .l{font-size:11.5px;color:#6b7770;text-transform:uppercase;letter-spacing:.04em;}
+  .stat-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-bottom:22px;}
+  .stat{
+    border:1px solid var(--line);border-radius:10px;background:var(--paper);padding:16px 16px 14px;
+    box-shadow:0 1px 2px rgba(23,24,26,0.04);position:relative;overflow:hidden;
+  }
+  .stat::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--line);}
+  .stat.accent-brick::before{background:var(--brick);}
+  .stat.accent-warn::before{background:var(--warn);}
+  .stat.accent-gold::before{background:#C9A44C;}
+  .stat.accent-danger::before{background:var(--danger);}
+  .stat .n{font-family:'Inter',sans-serif;font-size:26px;font-weight:700;letter-spacing:-0.02em;}
+  .stat .l{font-size:11px;color:#6b7770;text-transform:uppercase;letter-spacing:.05em;margin-top:2px;}
+
+  /* month calendar widget (staff sidebar) */
+  .cal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+  .cal-month-label{font-family:'Inter',sans-serif;font-weight:700;font-size:13.5px;}
+  .cal-nav{
+    width:28px;height:28px;border-radius:50%;border:1px solid var(--line);background:var(--paper);
+    font-size:16px;line-height:1;color:var(--ink);display:flex;align-items:center;justify-content:center;
+    transition:background-color .12s ease;
+  }
+  .cal-nav:hover{background:var(--ivory-2);}
+  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;}
+  .cal-dow{text-align:center;font-size:10px;color:#8a8477;font-weight:700;text-transform:uppercase;padding-bottom:4px;}
+  .cal-cell{
+    aspect-ratio:1;display:flex;align-items:center;justify-content:center;border:none;background:transparent;
+    border-radius:50%;font-size:12.5px;color:var(--ink);cursor:pointer;transition:background-color .12s ease;
+  }
+  .cal-cell.empty{cursor:default;}
+  .cal-cell:not(.empty):hover{background:var(--ivory-2);}
+  .cal-cell.today{font-weight:700;color:var(--brick);}
+  .cal-cell.selected{background:var(--brick);color:#fff;font-weight:700;}
+  .cal-cell.selected.today{background:var(--brick);color:#fff;}
 
   table.bookings{width:100%;border-collapse:collapse;background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;}
   table.bookings th{
@@ -257,4 +286,13 @@
     .field-row{grid-template-columns:1fr;}
     table.bookings{display:block;overflow-x:auto;white-space:nowrap;}
     .dash-header{flex-direction:column;align-items:flex-start;}
+  }
+
+  /* Print / "Save as PDF": show only the confirmation card, nothing else. */
+  @media print{
+    .topbar, footer.note, [data-no-print]{display:none !important;}
+    body{background:#fff;}
+    .app{max-width:100%;padding:0;}
+    .hero{display:none;}
+    #confirm-print-area{border:none;box-shadow:none;padding:0;}
   }

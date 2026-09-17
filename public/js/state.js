@@ -51,6 +51,7 @@ export const state = {
   dashBookings: [],
   dashLoading: false,
   dashWeeklyActivity: null,
+  calendarMonth: null, // { year, month } — lazily initialized from dashDate on first render
   selectedBookingId: null,
   showAddForm: false,
   addFormError: '',

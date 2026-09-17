@@ -26,7 +26,16 @@ function createApp() {
   app.use('/api', staffRoutes);
   app.use('/api/admin', adminRoutes);
 
-  // Any other route falls back to the single-page app shell.
+  // The staff/admin login+dashboard gets its own HTML shell (distinct
+  // <title>, and noindex so it never turns up in search results — see
+  // public/staff.html). The X-Robots-Tag header is the same directive
+  // again, but readable by crawlers that don't parse HTML at all.
+  app.get(['/staff', '/staff/*'], (req, res) => {
+    res.set('X-Robots-Tag', 'noindex, nofollow');
+    res.sendFile(path.join(__dirname, '..', 'public', 'staff.html'));
+  });
+
+  // Any other route falls back to the customer-facing app shell.
   app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
   });

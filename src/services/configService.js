@@ -102,7 +102,10 @@ function capacityForSlot(branch, date, slotStartMinutes) {
 
 function isBranchClosedOnDate(branch, date) {
   const dayOfWeek = new Date(date + 'T00:00:00').getDay();
-  const closedByWeeklySchedule = branch.closedDay !== null && branch.closedDay === dayOfWeek;
+  // Number(...) on both sides guards against a stored value that's a
+  // string ("2") instead of a number (2) — strict equality would treat
+  // those as never matching, silently disabling the weekly closure.
+  const closedByWeeklySchedule = branch.closedDay !== null && Number(branch.closedDay) === dayOfWeek;
   const closedByBlockedDate = branch.blockedDates.includes(date);
   return closedByWeeklySchedule || closedByBlockedDate;
 }

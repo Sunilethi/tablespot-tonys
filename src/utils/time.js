@@ -16,9 +16,36 @@ function minutesToHHMM(totalMinutes) {
   return String(hours).padStart(2, '0') + ':' + String(minutes).padStart(2, '0');
 }
 
-/** Today's date as 'YYYY-MM-DD', in the server's local timezone. */
-function todayISODate() {
-  return new Date().toISOString().slice(0, 10);
+const RESTAURANT_TIMEZONE = 'Europe/Berlin';
+
+/**
+ * The current moment, expressed in Europe/Berlin wall-clock time —
+ * regardless of what timezone the server process itself is actually
+ * running in (cloud hosts commonly default to UTC). Every "is this slot
+ * in the past" / "what's today's date" check in the app should go
+ * through this, not through the server's raw system clock.
+ */
+function getRestaurantNow() {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: RESTAURANT_TIMEZONE,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hour12: false,
+  }).formatToParts(new Date());
+
+  const map = {};
+  parts.forEach((p) => { map[p.type] = p.value; });
+
+  return {
+    date: `${map.year}-${map.month}-${map.day}`,
+    // Some environments format midnight as "24" instead of "00" — normalize it.
+    hours: map.hour === '24' ? 0 : Number(map.hour),
+    minutes: Number(map.minute),
+  };
 }
 
-module.exports = { toMinutes, minutesToHHMM, todayISODate };
+/** Today's date as 'YYYY-MM-DD', in the restaurant's own timezone. */
+function todayISODate() {
+  return getRestaurantNow().date;
+}
+
+module.exports = { toMinutes, minutesToHHMM, todayISODate, getRestaurantNow };

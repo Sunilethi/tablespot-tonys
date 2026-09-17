@@ -7,7 +7,7 @@
 
 const supabase = require('../db/supabaseClient');
 const config = require('../config/env');
-const { toMinutes, minutesToHHMM, todayISODate } = require('../utils/time');
+const { toMinutes, minutesToHHMM, getRestaurantNow } = require('../utils/time');
 const { generateBookingId, generateBookingRef } = require('../utils/ref');
 const configService = require('./configService');
 const emailService = require('./emailService');
@@ -60,9 +60,9 @@ async function getAvailability(branchId, date, partySize) {
   const durationMinutes = restaurantConfig.bookingDurationMinutes;
   const intervalMinutes = restaurantConfig.slotIntervalMinutes;
 
-  const now = new Date();
-  const isToday = date === todayISODate();
-  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  const restaurantNow = getRestaurantNow();
+  const isToday = date === restaurantNow.date;
+  const nowMinutes = restaurantNow.hours * 60 + restaurantNow.minutes;
 
   const slots = [];
   for (let slotStart = openMinutes; slotStart + durationMinutes <= closeMinutes; slotStart += intervalMinutes) {

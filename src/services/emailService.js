@@ -45,7 +45,11 @@ function isGerman(lang) {
 
 // ---------- Booking confirmed (fits within capacity) ----------
 
-function confirmationText(lang, booking, branch, calendarLink) {
+function confirmationText(lang, booking, branch, calendarLink, replyTo) {
+  const contactLine = isGerman(lang)
+    ? `Fragen zu Ihrer Reservierung? Rufen Sie uns an: ${branch.phone || '—'} oder schreiben Sie an ${replyTo}.\n\n`
+    : `Questions about your reservation? Call us on ${branch.phone || '—'} or email ${replyTo}.\n\n`;
+
   if (isGerman(lang)) {
     return (
       `Hallo ${booking.name},\n\n` +
@@ -57,7 +61,7 @@ function confirmationText(lang, booking, branch, calendarLink) {
       `Referenz: ${booking.ref}\n\n` +
       `Zum Kalender hinzufügen: ${calendarLink}\n` +
       `(Die .ics-Datei im Anhang funktioniert auch mit Apple Kalender und Outlook.)\n\n` +
-      `Änderungen oder Stornierung? Rufen Sie uns einfach an und nennen Sie Ihre Referenznummer.\n\n` +
+      contactLine +
       `Bis bald!\nTony's`
     );
   }
@@ -71,7 +75,7 @@ function confirmationText(lang, booking, branch, calendarLink) {
     `Reference: ${booking.ref}\n\n` +
     `Add to calendar: ${calendarLink}\n` +
     `(The attached .ics file also works with Apple Calendar and Outlook.)\n\n` +
-    `Need to change or cancel? Just call the restaurant and quote your reference number.\n\n` +
+    contactLine +
     `See you soon!\nTony's`
   );
 }
@@ -86,7 +90,7 @@ async function sendBookingConfirmation({ booking, branch, replyTo, durationMinut
     to: booking.email,
     replyTo,
     subject,
-    text: confirmationText(booking.lang, booking, branch, googleCalendarLink),
+    text: confirmationText(booking.lang, booking, branch, googleCalendarLink, replyTo),
     attachments: [icsAttachment],
   });
 }
@@ -130,7 +134,11 @@ async function sendWaitlistNotice({ booking, branch, replyTo }) {
 
 // ---------- Waitlist promoted to confirmed ----------
 
-function promotionText(lang, booking, branch, calendarLink) {
+function promotionText(lang, booking, branch, calendarLink, replyTo) {
+  const contactLine = isGerman(lang)
+    ? `Fragen zu Ihrer Reservierung? Rufen Sie uns an: ${branch.phone || '—'} oder schreiben Sie an ${replyTo}.\n\n`
+    : `Questions about your reservation? Call us on ${branch.phone || '—'} or email ${replyTo}.\n\n`;
+
   if (isGerman(lang)) {
     return (
       `Hallo ${booking.name},\n\n` +
@@ -141,6 +149,7 @@ function promotionText(lang, booking, branch, calendarLink) {
       `Personen: ${booking.guests}\n` +
       `Referenz: ${booking.ref}\n\n` +
       `Zum Kalender hinzufügen: ${calendarLink}\n\n` +
+      contactLine +
       `Bis bald!\nTony's`
     );
   }
@@ -153,6 +162,7 @@ function promotionText(lang, booking, branch, calendarLink) {
     `Guests: ${booking.guests}\n` +
     `Reference: ${booking.ref}\n\n` +
     `Add to calendar: ${calendarLink}\n\n` +
+    contactLine +
     `See you soon!\nTony's`
   );
 }
@@ -167,7 +177,7 @@ async function sendWaitlistPromotion({ booking, branch, replyTo, durationMinutes
     to: booking.email,
     replyTo,
     subject,
-    text: promotionText(booking.lang, booking, branch, googleCalendarLink),
+    text: promotionText(booking.lang, booking, branch, googleCalendarLink, replyTo),
     attachments: [icsAttachment],
   });
 }

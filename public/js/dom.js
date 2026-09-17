@@ -16,6 +16,13 @@ export function el(tag, attrs, children) {
       else if (key === 'html') element.innerHTML = attrs[key];
       else if (key.startsWith('on')) element.addEventListener(key.slice(2).toLowerCase(), attrs[key]);
       else if (key === 'disabled') { if (attrs[key]) element.setAttribute('disabled', 'disabled'); }
+      // Setting `checked` as a raw attribute is a real trap: if the value
+      // passed in is `undefined` (e.g. from `someBoolean || undefined`),
+      // setAttribute() stringifies it to the literal text "undefined" —
+      // and ANY string value on a checked attribute renders as checked,
+      // regardless of your actual data. Using the DOM property directly
+      // sidesteps that entirely: it's a real boolean, always.
+      else if (key === 'checked') { element.checked = !!attrs[key]; }
       else element.setAttribute(key, attrs[key]);
     }
   }

@@ -26,10 +26,12 @@ export function renderTopbar() {
     const langToggle = el('div', { class: 'lang-toggle' });
     langToggle.appendChild(el('button', {
       class: state.lang === 'en' ? 'active' : '',
+      'aria-pressed': state.lang === 'en' ? 'true' : 'false',
       onClick: () => { state.lang = 'en'; render(); },
     }, ['EN']));
     langToggle.appendChild(el('button', {
       class: state.lang === 'de' ? 'active' : '',
+      'aria-pressed': state.lang === 'de' ? 'true' : 'false',
       onClick: () => { state.lang = 'de'; render(); },
     }, ['DE']));
     nav.appendChild(langToggle);

@@ -33,6 +33,15 @@ export function render() {
   const root = document.getElementById('root');
   root.innerHTML = '';
 
+  // TS-QA-009: the <html lang="..."> attribute and document title were
+  // permanently stuck in English even when the customer switched the UI
+  // to German — screen readers and browser features (spellcheck, translate
+  // prompts) rely on this being accurate.
+  document.documentElement.lang = state.appMode === 'customer' ? state.lang : 'en';
+  document.title = state.appMode === 'staff'
+    ? 'Staff Dashboard — TableSpot'
+    : (state.lang === 'de' ? "Tony's — Tischreservierung" : "Tony's — Table Reservations");
+
   if (!state.loaded) {
     root.appendChild(el('div', { style: 'padding:60px;text-align:center;color:#6b7770;' }, ['Loading…']));
     return;
@@ -55,7 +64,7 @@ export function render() {
   if (state.view === 'customer') app.appendChild(renderCustomer());
   else if (state.view === 'staffLogin') app.appendChild(renderStaffLogin());
   else if (state.view === 'staffDash') app.appendChild(renderStaffDash());
-  app.appendChild(el('footer', { class: 'note' }, ['Powered by Tablespot']));
+  app.appendChild(el('footer', { class: 'note' }, ['Powered by TableSpot']));
 
   themeWrap.appendChild(app);
   root.appendChild(themeWrap);

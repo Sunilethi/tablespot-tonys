@@ -29,7 +29,7 @@ export function renderStaffDash() {
     el('div', {}, [
       el('div', {
         style: 'font-size:11px;font-weight:700;letter-spacing:.06em;color:var(--gold);text-transform:uppercase;margin-bottom:2px;',
-      }, ['Tablespot']),
+      }, ['TableSpot']),
       el('h1', {}, ['Reservations']),
       el('div', { style: 'color:#6b7770;font-size:13px;' }, [branchLabel]),
     ]),

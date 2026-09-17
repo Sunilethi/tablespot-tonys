@@ -15,14 +15,20 @@ export function renderStaffLogin() {
   const wrap = el('div', { class: 'login-wrap' });
   wrap.appendChild(el('div', {
     style: 'font-size:11px;font-weight:700;letter-spacing:.06em;color:var(--gold);text-transform:uppercase;margin-bottom:4px;',
-  }, ['Tablespot']));
+  }, ['TableSpot']));
   wrap.appendChild(el('h2', {}, ['Staff & admin access']));
   wrap.appendChild(el('div', { class: 'hint', style: 'margin:6px 0 16px;' }, ['Select your branch (or admin) and enter your PIN.']));
 
   if (state.loginError) wrap.appendChild(el('div', { class: 'msg error' }, [state.loginError]));
 
-  const targetField = el('div', { class: 'field' }, [el('label', {}, ['Branch'])]);
+  let loginBtn;
+  function syncLoginButton() {
+    if (loginBtn) loginBtn.disabled = !state.staffLoginTarget || !(state.staffPinInput || '').trim() || state.loginBusy;
+  }
+
+  const targetField = el('div', { class: 'field' }, [el('label', { for: 'staff-branch' }, ['Branch'])]);
   const targetSelect = el('select', {
+    id: 'staff-branch', name: 'branch',
     onChange: (e) => { state.staffLoginTarget = e.target.value || null; render(); },
   });
   targetSelect.appendChild(el('option', { value: '' }, ['— Select —']));
@@ -38,18 +44,20 @@ export function renderStaffLogin() {
   wrap.appendChild(targetField);
 
   wrap.appendChild(el('div', { class: 'field', style: 'margin-top:18px;' }, [
-    el('label', {}, ['PIN']),
+    el('label', { for: 'staff-pin' }, ['PIN']),
     el('input', {
-      type: 'password', inputmode: 'numeric', value: state.staffPinInput || '',
-      onInput: (e) => { state.staffPinInput = e.target.value; },
+      type: 'password', id: 'staff-pin', name: 'pin', autocomplete: 'off',
+      inputmode: 'numeric', required: 'required', value: state.staffPinInput || '',
+      onInput: (e) => { state.staffPinInput = e.target.value; syncLoginButton(); },
     }),
   ]));
 
-  wrap.appendChild(el('div', { class: 'btn-row' }, [
-    el('button', {
-      class: 'btn btn-primary', disabled: !state.staffLoginTarget || state.loginBusy, onClick: attemptLogin,
-    }, [state.loginBusy ? '…' : 'Log in']),
-  ]));
+  loginBtn = el('button', {
+    class: 'btn btn-primary',
+    disabled: !state.staffLoginTarget || !(state.staffPinInput || '').trim() || state.loginBusy,
+    onClick: attemptLogin,
+  }, [state.loginBusy ? '…' : 'Log in']);
+  wrap.appendChild(el('div', { class: 'btn-row' }, [loginBtn]));
   return wrap;
 }
 

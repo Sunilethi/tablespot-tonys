@@ -12,6 +12,12 @@
 import { state } from './state.js';
 
 export const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const DAY_NAMES_DE = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+
+/** Day-of-week abbreviation in the current customer-facing language. */
+export function dayName(index) {
+  return (state.lang === 'de' ? DAY_NAMES_DE : DAY_NAMES)[index];
+}
 
 export const STATUS_LABELS = [
   'waitlisted', 'pending', 'confirmed', 'arrived', 'seated',
@@ -43,6 +49,7 @@ export const T = {
     waitlistedTitle: "You’re on the waitlist", waitlistedBody: "That time was fully booked, so this isn't confirmed yet. If a table frees up you'll be confirmed automatically and emailed right away — no need to do anything.",
     newBooking: 'Make another reservation', loading: 'Checking availability…',
     summaryLocation: 'Location', summaryDate: 'Date', summaryTime: 'Time', summaryGuests: 'Guests', summaryName: 'Name',
+    editSelection: 'Edit',
   },
   de: {
     reserve: 'Tisch reservieren', staff: 'Personal & Admin',
@@ -68,6 +75,7 @@ export const T = {
     waitlistedTitle: 'Sie stehen auf der Warteliste', waitlistedBody: 'Diese Uhrzeit war ausgebucht, daher ist dies noch keine Bestätigung. Sobald ein Tisch frei wird, werden Sie automatisch bestätigt und per E-Mail informiert — Sie müssen nichts weiter tun.',
     newBooking: 'Weitere Reservierung', loading: 'Verfügbarkeit wird geprüft…',
     summaryLocation: 'Standort', summaryDate: 'Datum', summaryTime: 'Uhrzeit', summaryGuests: 'Personen', summaryName: 'Name',
+    editSelection: 'Ändern',
   },
 };
 

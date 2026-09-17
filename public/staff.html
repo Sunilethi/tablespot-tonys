@@ -3,9 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Tony's — Table Reservations</title>
-<meta name="description" content="Reserve a table at Tony's Ristorante — Steglitz, Stahnsdorf, or Airport. Book online in seconds.">
-<link rel="canonical" href="https://booking.tonysristorante.de/">
+<title>Staff Dashboard — TableSpot</title>
+<!-- TS-QA-011: this route is for restaurant staff, not the public —
+     it must never appear in search results. The meta tag below covers
+     crawlers that read HTML; the X-Robots-Tag response header (set in
+     src/app.js, since this file is served via an explicit route rather
+     than the static file middleware) covers crawlers that don't render
+     HTML at all — belt and suspenders, same directive from two angles. -->
+<meta name="robots" content="noindex, nofollow">
 <link rel="icon" type="image/png" href="/images/tonys-logo-white.png">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">

@@ -1,5 +1,5 @@
 /**
- * Thin wrapper around fetch() for talking to the Tablespot API. Every
+ * Thin wrapper around fetch() for talking to the TableSpot API. Every
  * network call in the app goes through here, so this is the one place
  * that knows about HTTP status codes, JSON parsing, and auth headers —
  * views never call fetch() directly.

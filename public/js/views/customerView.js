@@ -8,7 +8,7 @@
 
 import { el } from '../dom.js';
 import { state, getBranch, todayISO } from '../state.js';
-import { t, DAY_NAMES } from '../i18n.js';
+import { t, dayName } from '../i18n.js';
 import { apiFetch } from '../api.js';
 import { render } from '../render.js';
 
@@ -48,8 +48,9 @@ function renderBookingForm() {
   const row = el('div', { class: 'field-row' });
 
   // Branch — a plain dropdown, not a card grid.
-  const branchField = el('div', { class: 'field' }, [el('label', {}, [t('stepBranch')])]);
+  const branchField = el('div', { class: 'field' }, [el('label', { for: 'bf-branch' }, [t('stepBranch')])]);
   const branchSelect = el('select', {
+    id: 'bf-branch', name: 'branch',
     onChange: (e) => {
       state.cBranch = e.target.value || null;
       state.cTime = null;
@@ -67,9 +68,9 @@ function renderBookingForm() {
 
   // Date
   row.appendChild(el('div', { class: 'field' }, [
-    el('label', {}, [t('date')]),
+    el('label', { for: 'bf-date' }, [t('date')]),
     el('input', {
-      type: 'date', value: state.cDate, min: todayISO(),
+      type: 'date', id: 'bf-date', name: 'date', value: state.cDate, min: todayISO(),
       onChange: (e) => { state.cDate = e.target.value; state.cTime = null; fetchSlots(); },
     }),
   ]));
@@ -92,7 +93,7 @@ function renderBookingForm() {
   // Branch detail line (hours / capacity / closed day) once one is picked.
   if (state.cBranch) {
     const branch = getBranch(state.cBranch);
-    const closedLine = branch.closedDay !== null ? (' · ' + t('closedOn') + ': ' + DAY_NAMES[branch.closedDay]) : '';
+    const closedLine = branch.closedDay !== null ? (' · ' + t('closedOn') + ': ' + dayName(branch.closedDay)) : '';
     card.appendChild(el('div', { class: 'hint', style: 'margin-top:-8px;margin-bottom:16px;' }, [
       t('hoursLabel') + ': ' + state.config.openTime + '–' + state.config.closeTime + closedLine,
     ]));
@@ -117,6 +118,7 @@ function renderBookingForm() {
         // waitlist join rather than blocking the customer outright.
         const btn = el('button', {
           class: 'slot' + (selected ? ' selected' : '') + (slot.full ? ' waitlist' : ''),
+          'aria-pressed': selected ? 'true' : 'false',
           onClick: () => { state.cTime = slot.time; render(); },
         }, [
           slot.time,
@@ -163,36 +165,82 @@ function renderStepDetails() {
   card.appendChild(el('h2', {}, [t('yourDetails')]));
   if (state.cError) card.appendChild(el('div', { class: 'msg error' }, [state.cError]));
 
+  // Booking summary — lets the customer verify (or fix) their selection
+  // before typing out their details, rather than discovering a mistake
+  // only after confirming.
+  const branch = getBranch(state.cBranch);
+  const summary = el('div', { class: 'summary-list', style: 'border:1px solid var(--line);border-radius:8px;padding:4px 14px;margin-bottom:20px;' }, [
+    el('li', {}, [el('span', {}, [t('summaryLocation')]), el('span', {}, [branch.name + ' — ' + branch.city])]),
+    el('li', {}, [el('span', {}, [t('summaryDate')]), el('span', {}, [state.cDate])]),
+    el('li', {}, [el('span', {}, [t('summaryTime')]), el('span', {}, [state.cTime])]),
+    el('li', { style: 'border-bottom:none;' }, [
+      el('span', {}, [t('summaryGuests')]), el('span', {}, [String(state.cGuests)]),
+    ]),
+  ]);
+  card.appendChild(summary);
+  card.appendChild(el('div', { class: 'btn-row', style: 'margin:-14px 0 18px;justify-content:flex-start;' }, [
+    el('button', {
+      class: 'btn btn-ghost', style: 'padding:6px 14px;font-size:12.5px;',
+      onClick: () => { state.cStep = 1; render(); },
+    }, [t('editSelection')]),
+  ]));
+
+  // The confirm button's enabled state needs to react to every
+  // keystroke in the name field (a required field) — but text inputs
+  // deliberately don't call the global render() on every keystroke,
+  // since that would rebuild the input and steal focus (see dom.js).
+  // syncConfirmButton() updates just the one button directly instead.
+  let confirmBtn;
+  function isFormValid() {
+    return !!state.cForm.name.trim() && !!state.cForm.consent &&
+      (!state.cForm.allergy.trim() || !!state.cForm.allergyConsent);
+  }
+  function syncConfirmButton() {
+    if (confirmBtn) confirmBtn.disabled = !isFormValid() || state.cSubmitting;
+  }
+
   const row1 = el('div', { class: 'field-row' });
   row1.appendChild(el('div', { class: 'field' }, [
-    el('label', {}, [t('name') + ' *']),
-    // NOTE: text inputs use onInput to mutate state directly WITHOUT
-    // calling render() — re-rendering on every keystroke would rebuild
-    // the input element and steal focus. Only choices that change what's
-    // shown on screen (checkboxes, selects, step changes) call render().
-    el('input', { type: 'text', value: state.cForm.name, onInput: (e) => { state.cForm.name = e.target.value; } }),
+    el('label', { for: 'cf-name' }, [t('name') + ' *']),
+    el('input', {
+      type: 'text', id: 'cf-name', name: 'name', autocomplete: 'name', required: 'required',
+      value: state.cForm.name,
+      onInput: (e) => { state.cForm.name = e.target.value; syncConfirmButton(); },
+    }),
   ]));
   row1.appendChild(el('div', { class: 'field' }, [
-    el('label', {}, [t('phone')]),
-    el('input', { type: 'tel', value: state.cForm.phone, onInput: (e) => { state.cForm.phone = e.target.value; } }),
+    el('label', { for: 'cf-phone' }, [t('phone')]),
+    el('input', {
+      type: 'tel', id: 'cf-phone', name: 'tel', autocomplete: 'tel',
+      value: state.cForm.phone,
+      onInput: (e) => { state.cForm.phone = e.target.value; },
+    }),
   ]));
   card.appendChild(row1);
 
   const row2 = el('div', { class: 'field-row' });
   row2.appendChild(el('div', { class: 'field' }, [
-    el('label', {}, [t('email')]),
-    el('input', { type: 'email', value: state.cForm.email, onInput: (e) => { state.cForm.email = e.target.value; } }),
+    el('label', { for: 'cf-email' }, [t('email')]),
+    el('input', {
+      type: 'email', id: 'cf-email', name: 'email', autocomplete: 'email',
+      value: state.cForm.email,
+      onInput: (e) => { state.cForm.email = e.target.value; },
+    }),
   ]));
   row2.appendChild(el('div', { class: 'field' }, [
-    el('label', {}, [t('allergy')]),
-    el('input', { type: 'text', value: state.cForm.allergy, onInput: (e) => { state.cForm.allergy = e.target.value; } }),
+    el('label', { for: 'cf-allergy' }, [t('allergy')]),
+    el('input', {
+      type: 'text', id: 'cf-allergy', name: 'allergy',
+      value: state.cForm.allergy,
+      onInput: (e) => { state.cForm.allergy = e.target.value; syncConfirmButton(); },
+    }),
     // Allergy/dietary data can qualify as health data under GDPR Art. 9,
     // so it gets its own explicit consent, separate from the general
     // privacy-policy acknowledgment below. See Datenschutzerklaerung.md.
-    el('label', { class: 'checkline', style: 'margin-top:8px;' }, [
+    el('label', { class: 'checkline', style: 'margin-top:8px;', for: 'cf-allergy-consent' }, [
       el('input', {
-        type: 'checkbox', checked: state.cForm.allergyConsent || undefined,
-        onChange: (e) => { state.cForm.allergyConsent = e.target.checked; },
+        type: 'checkbox', id: 'cf-allergy-consent', checked: state.cForm.allergyConsent || undefined,
+        onChange: (e) => { state.cForm.allergyConsent = e.target.checked; syncConfirmButton(); render(); },
       }),
       el('span', { style: 'font-size:12px;color:#6b7770;' }, [t('allergyConsent')]),
     ]),
@@ -200,22 +248,26 @@ function renderStepDetails() {
   card.appendChild(row2);
 
   card.appendChild(el('div', { class: 'field' }, [
-    el('label', {}, [t('notes')]),
-    el('textarea', { onInput: (e) => { state.cForm.notes = e.target.value; } }, []),
+    el('label', { for: 'cf-notes' }, [t('notes')]),
+    el('textarea', {
+      id: 'cf-notes', name: 'notes',
+      onInput: (e) => { state.cForm.notes = e.target.value; },
+    }, []),
   ]));
 
-  card.appendChild(el('label', { class: 'checkline' }, [
+  card.appendChild(el('label', { class: 'checkline', for: 'cf-child-seat' }, [
     el('input', {
-      type: 'checkbox', checked: state.cForm.childSeat || undefined,
+      type: 'checkbox', id: 'cf-child-seat', checked: state.cForm.childSeat || undefined,
       onChange: (e) => { state.cForm.childSeat = e.target.checked; },
     }),
     el('span', {}, [t('childSeat')]),
   ]));
 
-  const consentLine = el('label', { class: 'checkline' }, [
+  const consentLine = el('label', { class: 'checkline', for: 'cf-consent' }, [
     el('input', {
-      type: 'checkbox', checked: state.cForm.consent || undefined,
-      onChange: (e) => { state.cForm.consent = e.target.checked; },
+      type: 'checkbox', id: 'cf-consent', required: 'required',
+      checked: state.cForm.consent || undefined,
+      onChange: (e) => { state.cForm.consent = e.target.checked; syncConfirmButton(); render(); },
     }),
   ]);
   const consentTextWrap = el('span', {});
@@ -229,11 +281,13 @@ function renderStepDetails() {
   consentLine.appendChild(consentTextWrap);
   card.appendChild(consentLine);
 
+  confirmBtn = el('button', {
+    class: 'btn btn-primary', disabled: !isFormValid() || state.cSubmitting, onClick: submitBooking,
+  }, [state.cSubmitting ? '…' : t('confirmBooking')]);
+
   card.appendChild(el('div', { class: 'btn-row split' }, [
     el('button', { class: 'btn btn-ghost', onClick: () => { state.cStep = 1; render(); } }, [t('back')]),
-    el('button', {
-      class: 'btn btn-primary', disabled: state.cSubmitting, onClick: submitBooking,
-    }, [state.cSubmitting ? '…' : t('confirmBooking')]),
+    confirmBtn,
   ]));
   return card;
 }

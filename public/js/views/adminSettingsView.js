@@ -8,6 +8,7 @@
 import { el } from '../dom.js';
 import { state } from '../state.js';
 import { DAY_NAMES } from '../i18n.js';
+import { showToast } from '../toast.js';
 import { apiFetch } from '../api.js';
 import { render } from '../render.js';
 
@@ -212,7 +213,10 @@ async function pushBranchSettings(branch) {
       capacity: branch.capacity, closedDay: branch.closedDay, pin: branch.pin,
       blockedDates: branch.blockedDates, capacityOverrides: branch.capacityOverrides,
     }, true);
-  } catch (err) { /* re-render shows whatever the server actually persisted, on next full refresh */ }
+    showToast('Saved');
+  } catch (err) {
+    showToast('Could not save — please try again');
+  }
   render();
 }
 
@@ -225,6 +229,9 @@ async function pushGlobalSettings() {
       slotIntervalMinutes: state.config.slotIntervalMinutes,
       adminPin: state.config.adminPin,
     }, true);
-  } catch (err) { /* see pushBranchSettings() */ }
+    showToast('Saved');
+  } catch (err) {
+    showToast('Could not save — please try again');
+  }
   render();
 }

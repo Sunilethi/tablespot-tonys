@@ -14,16 +14,17 @@ import { render } from '../render.js';
 
 export function renderCustomer() {
   const wrap = el('div', {});
-  wrap.appendChild(el('div', { class: 'hero' }, [
-    el('h1', {}, [t('heroTitle')]),
-    el('p', {}, [t('heroBody')]),
-    el('div', { class: 'hero-rule' }),
-  ]));
 
   if (state.cStep === 3) {
     wrap.appendChild(renderConfirmStep());
     return wrap;
   }
+
+  wrap.appendChild(el('div', { class: 'hero' }, [
+    el('h1', {}, [t('heroTitle')]),
+    el('p', {}, [t('heroBody')]),
+    el('div', { class: 'hero-rule' }),
+  ]));
 
   const stepsBar = el('div', { class: 'steps' });
   [[1, t('stepBranch')], [2, t('stepDetails')]].forEach(([n, label]) => {
@@ -104,7 +105,9 @@ function renderBookingForm() {
   if (!state.cBranch) {
     card.appendChild(el('div', { class: 'hint' }, [t('chooseBranchHint')]));
   } else if (state.cSlotsLoading) {
-    card.appendChild(el('div', { class: 'spinner-row' }, [el('div', { class: 'spinner' }), el('span', {}, [t('loading')])]));
+    const skeletonGrid = el('div', { class: 'slot-grid' });
+    for (let i = 0; i < 8; i++) skeletonGrid.appendChild(el('div', { class: 'skeleton skeleton-slot' }));
+    card.appendChild(skeletonGrid);
   } else if (state.cSlotsClosed) {
     card.appendChild(el('div', { class: 'msg error' }, [getBranch(state.cBranch).name + ' — ' + t('closedOn') + ' (' + state.cDate + ').']));
   } else if (state.cSlots) {

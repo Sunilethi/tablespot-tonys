@@ -10,7 +10,9 @@ import { STATUS_LABELS } from '../i18n.js';
 import { t } from '../i18n.js';
 import { apiFetch } from '../api.js';
 import { render } from '../render.js';
+import { showToast } from '../toast.js';
 import { renderAdminSettings } from './adminSettingsView.js';
+import { renderFloorTab, reloadFloorIfVisible } from './floorPlanView.js';
 
 const ACTIVE_STATUSES = ['pending', 'confirmed', 'arrived', 'seated'];
 
@@ -49,6 +51,10 @@ export function renderStaffDash() {
     class: 'tab2' + (state.dashTab === 'today' ? ' active' : ''),
     onClick: () => { state.dashTab = 'today'; render(); },
   }, ['Bookings']));
+  tabs.appendChild(el('button', {
+    class: 'tab2' + (state.dashTab === 'floor' ? ' active' : ''),
+    onClick: () => { state.dashTab = 'floor'; render(); },
+  }, ['Floor']));
   if (isAdmin) {
     tabs.appendChild(el('button', {
       class: 'tab2' + (state.dashTab === 'admin' ? ' active' : ''),
@@ -59,6 +65,11 @@ export function renderStaffDash() {
 
   if (state.dashTab === 'admin' && isAdmin) {
     wrap.appendChild(renderAdminSettings());
+    return wrap;
+  }
+
+  if (state.dashTab === 'floor') {
+    wrap.appendChild(renderFloorTab(isAdmin));
     return wrap;
   }
 
@@ -177,7 +188,7 @@ function renderCalendarWidget() {
 
   card.appendChild(el('button', {
     class: 'btn btn-ghost', style: 'width:100%;margin-top:10px;padding:8px;font-size:12.5px;',
-    onClick: () => { state.dashDate = todayISO(); state.calendarMonth = null; refreshDashBookings(); },
+    onClick: () => { state.dashDate = todayISO(); state.calendarMonth = null; refreshDashBookings(); reloadFloorIfVisible(state.staffBranchId === null); },
   }, ['Today']));
 
   return card;
@@ -226,7 +237,7 @@ function renderBookingsPanel(isAdmin) {
   const toolbar = el('div', { class: 'dash-toolbar' });
   toolbar.appendChild(el('input', {
     type: 'date', value: state.dashDate,
-    onChange: (e) => { state.dashDate = e.target.value; state.calendarMonth = null; refreshDashBookings(); },
+    onChange: (e) => { state.dashDate = e.target.value; state.calendarMonth = null; refreshDashBookings(); reloadFloorIfVisible(isAdmin); },
   }));
   toolbar.appendChild(el('input', {
     type: 'text', placeholder: 'Search name, phone or reference', value: state.dashSearch, style: 'min-width:220px;',
@@ -295,6 +306,7 @@ function renderBookingsTimeline(bookings, isAdmin) {
 
 function renderBookingCard(booking, isAdmin) {
   const badges = [];
+  if (booking.needsTableAttention) badges.push(el('span', { class: 'badge-icon flag-icon', title: 'Needs a table assigned by staff' }, ['\uD83D\uDD34']));
   if (booking.allergy) badges.push(el('span', { class: 'badge-icon', title: 'Allergy: ' + booking.allergy }, ['\u26A0\uFE0F']));
   if (booking.childSeat) badges.push(el('span', { class: 'badge-icon', title: 'Child seat requested' }, ['\uD83D\uDC76']));
   if (booking.source === 'phone') badges.push(el('span', { class: 'badge-icon', title: 'Booked by phone' }, ['\u260E\uFE0F']));
@@ -342,6 +354,27 @@ function renderBookingDetailPanel(booking, isAdmin) {
 
   modal.appendChild(el('div', { class: 'hint', style: 'margin-top:10px;' }, ['Reference: ' + booking.ref]));
 
+  if (booking.needsTableAttention) {
+    const flagRow = el('div', {
+      style: 'display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:14px;padding:10px 12px;background:#FBEAEA;border:1px solid #F0C4C4;border-radius:8px;',
+    }, [
+      el('div', { style: 'font-size:12.5px;color:var(--danger);font-weight:600;' }, ['\u26A0 No table auto-assigned — needs a human to seat this one']),
+      el('button', {
+        class: 'btn btn-ghost', style: 'padding:6px 12px;font-size:12px;flex-shrink:0;',
+        onClick: async () => {
+          try {
+            const result = await apiFetch('POST', '/api/bookings/' + encodeURIComponent(booking.id) + '/reassign-table', undefined, true);
+            showToast(result.assigned ? 'Table assigned' : 'Still nothing fits');
+          } catch (err) {
+            showToast('Could not reassign — try again');
+          }
+          await refreshDashBookings();
+        },
+      }, ['Try again']),
+    ]);
+    modal.appendChild(flagRow);
+  }
+
   const contactRow = el('div', { class: 'field-row', style: 'margin-top:16px;' });
   contactRow.appendChild(el('div', { class: 'field' }, [el('label', {}, ['Phone']), el('div', {}, [booking.phone || '—'])]));
   contactRow.appendChild(el('div', { class: 'field' }, [el('label', {}, ['Email']), el('div', {}, [booking.email || '—'])]));
@@ -369,7 +402,7 @@ function renderBookingDetailPanel(booking, isAdmin) {
       const confirmed = confirm('Permanently delete this reservation? This cannot be undone.');
       if (confirmed) { removeBooking(booking.id); close(); }
     },
-    style: 'background:none;border:1px solid #ECC6BC;color:var(--brick);border-radius:999px;padding:10px 18px;font-size:13px;',
+    style: 'background:#FBEAEA;border:1px solid #F0C4C4;color:var(--danger);border-radius:999px;padding:10px 18px;font-size:13px;font-weight:600;',
   }, ['Delete']));
 
   const rightActions = el('div', { style: 'display:flex;gap:10px;' });

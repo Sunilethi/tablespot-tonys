@@ -68,4 +68,8 @@ export function render() {
 
   themeWrap.appendChild(app);
   root.appendChild(themeWrap);
+
+  if (state.toast) {
+    root.appendChild(el('div', { class: 'toast' }, [state.toast]));
+  }
 }

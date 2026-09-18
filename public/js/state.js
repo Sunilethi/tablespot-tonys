@@ -20,6 +20,7 @@ export const state = {
   view: 'customer', // 'customer' | 'staffLogin' | 'staffDash'
   config: null,
   loaded: false,
+  toast: null, // transient success message, e.g. "Saved" after an admin setting change
 
   // customer booking wizard
   cStep: 1,
@@ -47,12 +48,19 @@ export const state = {
   // staff dashboard
   dashDate: todayISO(),
   dashSearch: '',
-  dashTab: 'today', // 'today' | 'admin'
+  dashTab: 'today', // 'today' | 'floor' | 'admin'
   dashBookings: [],
   dashLoading: false,
   dashWeeklyActivity: null,
   calendarMonth: null, // { year, month } — lazily initialized from dashDate on first render
   selectedBookingId: null,
+
+  // Floor plan
+  floorBranchId: null,       // which branch's floor plan is being viewed/edited (admin picks; branch staff default to their own)
+  floorTables: null,         // admin editor's raw table list
+  floorStatus: null,         // staff view's live { tables, flagged }
+  floorLoading: false,
+  addTableForm: { name: '', capacity: 2, zone: 'indoor', shape: 'rect' },
   showAddForm: false,
   addFormError: '',
   addFormBusy: false,

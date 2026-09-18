@@ -112,3 +112,42 @@ on conflict (id) do nothing;
 -- (If you'd already added real overrides using the old whole-day format,
 -- let me know and I'll write a proper data-preserving migration instead
 -- of this reset.)
+
+-- ---------------------------------------------------------------------
+-- FLOOR PLAN: individual tables, drag-positioned by the admin, auto-
+-- assigned to bookings by the backend. See FLOOR_PLAN_NOTES.md.
+--
+-- IMPORTANT: once this is added, a branch's real seat capacity comes
+-- from the SUM of its active tables, not the old manual "capacity"
+-- number on the branches table. A branch with zero tables defined has
+-- an effective capacity of 0 — bookable only once its tables exist.
+-- This is deliberate (confirmed choice), not a bug — set up each
+-- branch's tables before expecting it to take bookings again.
+-- ---------------------------------------------------------------------
+
+create table if not exists restaurant_tables (
+  id text primary key,
+  restaurant_id text not null references restaurants(id) on delete cascade,
+  branch_id text not null references branches(id) on delete cascade,
+  name text not null,                          -- e.g. "T1", "Window 4"
+  capacity int not null,
+  zone text not null default 'indoor',         -- 'indoor' | 'outdoor'
+  shape text not null default 'rect',          -- 'rect' | 'round' (rendering only)
+  pos_x int not null default 20,
+  pos_y int not null default 20,
+  width int not null default 80,
+  height int not null default 80,
+  active boolean not null default true,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_tables_branch on restaurant_tables (branch_id);
+
+alter table restaurant_tables enable row level security;
+-- No policies — same pattern as every other table here: only the
+-- service_role key (used privately by the backend) can read or write.
+
+alter table branches add column if not exists outdoor_active boolean not null default true;
+
+alter table bookings add column if not exists table_id text references restaurant_tables(id) on delete set null;
+alter table bookings add column if not exists needs_table_attention boolean not null default false;

@@ -268,9 +268,11 @@ function renderEditableTile(table) {
     }, ['\u00D7']),
     el('div', { class: 'floor-tile-name' }, [table.name]),
     el('div', { class: 'floor-tile-cap' }, [table.capacity + ' seats']),
+    el('div', { class: 'floor-tile-resize', title: 'Drag to resize' }),
   ]);
 
   attachDragHandlers(tile, table);
+  attachResizeHandlers(tile, table);
   return tile;
 }
 
@@ -285,7 +287,7 @@ function attachDragHandlers(tileEl, table) {
   let startClientX = 0, startClientY = 0, startX = 0, startY = 0;
 
   tileEl.addEventListener('pointerdown', (e) => {
-    if (e.target.classList.contains('floor-tile-delete')) return;
+    if (e.target.classList.contains('floor-tile-delete') || e.target.classList.contains('floor-tile-resize')) return;
     dragging = true;
     tileEl.setPointerCapture(e.pointerId);
     startClientX = e.clientX;
@@ -314,5 +316,51 @@ function attachDragHandlers(tileEl, table) {
     try {
       await apiFetch('PATCH', '/api/admin/tables/' + encodeURIComponent(table.id), { x: table.x, y: table.y }, true);
     } catch (err) { /* position will reload correctly next fetch either way */ }
+  });
+}
+
+/**
+ * A small handle in the tile's bottom-right corner, resized by dragging —
+ * same direct-DOM-manipulation-during-drag approach as position dragging
+ * above, kept as a fully separate pointer sequence (stopPropagation on
+ * its own pointerdown) so grabbing the handle never also moves the tile.
+ */
+function attachResizeHandlers(tileEl, table) {
+  const handle = tileEl.querySelector('.floor-tile-resize');
+  const MIN_SIZE = 44; // stays usable/readable even at the smallest size
+
+  let resizing = false;
+  let startClientX = 0, startClientY = 0, startWidth = 0, startHeight = 0;
+
+  handle.addEventListener('pointerdown', (e) => {
+    e.stopPropagation();
+    resizing = true;
+    handle.setPointerCapture(e.pointerId);
+    startClientX = e.clientX;
+    startClientY = e.clientY;
+    startWidth = table.width;
+    startHeight = table.height;
+    tileEl.style.zIndex = '10';
+  });
+
+  handle.addEventListener('pointermove', (e) => {
+    if (!resizing) return;
+    e.stopPropagation();
+    const newWidth = Math.max(MIN_SIZE, startWidth + (e.clientX - startClientX));
+    const newHeight = Math.max(MIN_SIZE, startHeight + (e.clientY - startClientY));
+    tileEl.style.width = newWidth + 'px';
+    tileEl.style.height = newHeight + 'px';
+    table.width = newWidth;
+    table.height = newHeight;
+  });
+
+  handle.addEventListener('pointerup', async (e) => {
+    if (!resizing) return;
+    e.stopPropagation();
+    resizing = false;
+    tileEl.style.zIndex = '';
+    try {
+      await apiFetch('PATCH', '/api/admin/tables/' + encodeURIComponent(table.id), { width: table.width, height: table.height }, true);
+    } catch (err) { /* size will reload correctly next fetch either way */ }
   });
 }

@@ -41,7 +41,8 @@ async function getRestaurantConfig({ includeSecrets = false } = {}) {
     address: row.address,
     phone: row.phone,
     closedDay: row.closed_day === null || row.closed_day === undefined ? null : Number(row.closed_day),
-    capacity: Number(row.capacity),
+    capacity: Number(row.capacity), // legacy manual number, kept only as a display fallback — see tableService.effectiveCapacity for the real value once tables exist
+    outdoorActive: row.outdoor_active !== false,
     blockedDates: row.blocked_dates || [],
     // Each entry: { date, capacity, startTime?, endTime? }. When
     // startTime/endTime are omitted, the override applies to the whole
@@ -83,7 +84,12 @@ function findBranch(restaurantConfig, branchId) {
  * whole-day override (one with no startTime/endTime), falling back to
  * the branch's normal standing capacity.
  */
-function capacityForSlot(branch, date, slotStartMinutes) {
+/**
+ * @param {number} baseCapacity - the branch's real seat capacity for
+ *   this request (from tableService.effectiveCapacity), fetched ONCE per
+ *   request and passed in here rather than re-queried per time slot.
+ */
+function capacityForSlot(branch, date, slotStartMinutes, baseCapacity) {
   const overridesForDate = (branch.capacityOverrides || []).filter((o) => o.date === date);
 
   const windowed = overridesForDate.find((o) => {
@@ -97,7 +103,7 @@ function capacityForSlot(branch, date, slotStartMinutes) {
   const wholeDay = overridesForDate.find((o) => !o.startTime || !o.endTime);
   if (wholeDay) return wholeDay.capacity;
 
-  return branch.capacity;
+  return baseCapacity;
 }
 
 function isBranchClosedOnDate(branch, date) {
@@ -110,16 +116,19 @@ function isBranchClosedOnDate(branch, date) {
   return closedByWeeklySchedule || closedByBlockedDate;
 }
 
-async function updateBranchSettings(branchId, { capacity, closedDay, pin, blockedDates, capacityOverrides }) {
+async function updateBranchSettings(branchId, { capacity, closedDay, pin, blockedDates, capacityOverrides, outdoorActive }) {
+  const patch = {
+    capacity,
+    closed_day: closedDay === null ? null : closedDay,
+    pin,
+    blocked_dates: blockedDates,
+    capacity_overrides: capacityOverrides,
+  };
+  if (outdoorActive !== undefined) patch.outdoor_active = !!outdoorActive;
+
   const { error } = await supabase
     .from('branches')
-    .update({
-      capacity,
-      closed_day: closedDay === null ? null : closedDay,
-      pin,
-      blocked_dates: blockedDates,
-      capacity_overrides: capacityOverrides,
-    })
+    .update(patch)
     .eq('id', branchId)
     .eq('restaurant_id', config.restaurantId);
   if (error) throw new Error(error.message);

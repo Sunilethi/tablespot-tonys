@@ -11,6 +11,7 @@ const { toMinutes, minutesToHHMM, getRestaurantNow } = require('../utils/time');
 const { generateBookingId, generateBookingRef } = require('../utils/ref');
 const configService = require('./configService');
 const emailService = require('./emailService');
+const tableService = require('./tableService');
 
 /**
  * Total guests already booked (in an active, capacity-counting status)
@@ -59,6 +60,7 @@ async function getAvailability(branchId, date, partySize) {
   const closeMinutes = toMinutes(restaurantConfig.closeTime);
   const durationMinutes = restaurantConfig.bookingDurationMinutes;
   const intervalMinutes = restaurantConfig.slotIntervalMinutes;
+  const baseCapacity = await tableService.effectiveCapacity(branchId, branch.outdoorActive);
 
   const restaurantNow = getRestaurantNow();
   const isToday = date === restaurantNow.date;
@@ -67,7 +69,7 @@ async function getAvailability(branchId, date, partySize) {
   const slots = [];
   for (let slotStart = openMinutes; slotStart + durationMinutes <= closeMinutes; slotStart += intervalMinutes) {
     if (isToday && slotStart < nowMinutes) continue;
-    const capacity = configService.capacityForSlot(branch, date, slotStart);
+    const capacity = configService.capacityForSlot(branch, date, slotStart, baseCapacity);
     const bookedGuests = await guestsOverlappingSlot(branchId, date, slotStart, durationMinutes, null);
     const remaining = capacity - bookedGuests;
     slots.push({
@@ -98,7 +100,8 @@ async function createBooking(bookingInput, { isStaffBooking = false, source = 'w
   }
 
   const startMinutes = toMinutes(bookingInput.time);
-  const capacity = configService.capacityForSlot(branch, bookingInput.date, startMinutes);
+  const baseCapacity = await tableService.effectiveCapacity(branch.id, branch.outdoorActive);
+  const capacity = configService.capacityForSlot(branch, bookingInput.date, startMinutes, baseCapacity);
   const bookedGuests = await guestsOverlappingSlot(
     branch.id, bookingInput.date, startMinutes, restaurantConfig.bookingDurationMinutes, null
   );
@@ -107,6 +110,24 @@ async function createBooking(bookingInput, { isStaffBooking = false, source = 'w
   const id = generateBookingId();
   const ref = generateBookingRef();
   const status = fitsWithinCapacity ? (isStaffBooking ? 'confirmed' : 'pending') : 'waitlisted';
+
+  // Table auto-assignment is a best-effort layer ON TOP of the capacity
+  // decision above — it never changes whether the booking is accepted,
+  // only which physical table (if any) it's assigned to. If nothing
+  // fits, the booking still goes through, just flagged for staff.
+  let assignedTableId = null;
+  let needsTableAttention = false;
+  if (fitsWithinCapacity) {
+    const bestTable = await tableService.findBestFitTable(
+      branch.id, bookingInput.date, startMinutes, restaurantConfig.bookingDurationMinutes,
+      bookingInput.guests, branch.outdoorActive
+    );
+    if (bestTable) {
+      assignedTableId = bestTable.id;
+    } else {
+      needsTableAttention = true;
+    }
+  }
 
   const { error: insertError } = await supabase.from('bookings').insert({
     id,
@@ -129,6 +150,8 @@ async function createBooking(bookingInput, { isStaffBooking = false, source = 'w
     privacy_consent_at: bookingInput.privacyConsentAt || null,
     allergy_consent: !!bookingInput.allergyConsent,
     policy_version: bookingInput.policyVersion || '',
+    table_id: assignedTableId,
+    needs_table_attention: needsTableAttention,
     created_at: new Date().toISOString(),
   });
   if (insertError) throw new Error(insertError.message);
@@ -183,14 +206,23 @@ async function promoteWaitlist(branchId, date) {
 
   for (const booking of waitlistedBookings) {
     const startMinutes = toMinutes(booking.time);
-    const capacity = configService.capacityForSlot(branch, date, startMinutes);
+    const baseCapacity = await tableService.effectiveCapacity(branchId, branch.outdoorActive);
+    const capacity = configService.capacityForSlot(branch, date, startMinutes, baseCapacity);
     const bookedGuests = await guestsOverlappingSlot(
       branchId, date, startMinutes, restaurantConfig.bookingDurationMinutes, booking.id
     );
     const nowFits = bookedGuests + Number(booking.guests) <= capacity;
     if (!nowFits) continue;
 
-    await supabase.from('bookings').update({ status: 'confirmed' }).eq('id', booking.id);
+    const bestTable = await tableService.findBestFitTable(
+      branchId, date, startMinutes, restaurantConfig.bookingDurationMinutes, booking.guests, branch.outdoorActive
+    );
+
+    await supabase.from('bookings').update({
+      status: 'confirmed',
+      table_id: bestTable ? bestTable.id : null,
+      needs_table_attention: !bestTable,
+    }).eq('id', booking.id);
     try {
       await emailService.sendWaitlistPromotion({
         booking: {

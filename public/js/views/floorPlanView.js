@@ -140,7 +140,7 @@ function renderFloorLiveView(isAdmin) {
     ]));
   } else {
     ['indoor', 'outdoor'].forEach((zone) => {
-      const zoneTables = statusData.tables.filter((t) => t.zone === zone && t.active);
+      const zoneTables = statusData.tables.filter((t) => t.zone === zone);
       if (zoneTables.length === 0) return;
       canvasCard.appendChild(el('div', { class: 'floor-zone-label' }, [ZONE_LABEL[zone]]));
       const canvas = el('div', { class: 'floor-canvas' });
@@ -155,7 +155,7 @@ function renderFloorLiveView(isAdmin) {
 function renderLiveTile(t) {
   const isOccupied = t.status === 'occupied';
   const tile = el('div', {
-    class: 'floor-tile' + (isOccupied ? ' occupied' : ' free') + (t.shape === 'round' ? ' round' : ''),
+    class: 'floor-tile' + (isOccupied ? ' occupied' : ' free') + (t.shape === 'round' ? ' round' : '') + (t.active ? '' : ' inactive'),
     style: `left:${t.x}px;top:${t.y}px;width:${t.width}px;height:${t.height}px;`,
     title: isOccupied ? `${t.booking.name} · ${t.booking.guests} guests · ${t.booking.time}` : 'Free',
   }, [
